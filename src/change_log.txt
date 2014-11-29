@@ -1,0 +1,111 @@
+#c:/r/draw_framing/draw_framing_main.rb
+Change log
+
+Still to do/planned changes:
+When creating new framing component, check to see if same size one exists already and use same definition
+Tidy up Status Prompts and VCB messages and UserText input to make sense for frame drawing (they still mostly refer to CLineTool original)
+Keystrokes Tab and Shift+Tab to cycle forward/backward through timber sizes
+
+
+Planned changes made:
+Keystrokes cursor/arrow keys Left, Right, Up, Down to toggle lock/unlock of drawing axis (but not orientation) DONE in v0.55
+Add ability to choose additional Custom sizes and Actual not nominal sizes - DONE in v0.54
+If possible, make it single undo to remove not only component drawn by PushPull but also original face and edges drawn at origin if operation cancelled before final PushPull DONE in v0.52
+
+
+
+## v0.58 started 2014-11-29 11:10 PM
+## Began using GitHub for source control
+
+## v0.57 started 2014-11-25 10:18 AM
+## Attempting to draw geometry and create geometry around face.normal 
+##   if first click is on NON-orthogonal face
+
+## v0.56 2014-11-25 10:15 AM
+## Orient long axis vector parallel to face.normal 
+##   if first pick is on an orthogonal face
+
+## v0.55 - started on 2014-11-24
+## Implemented keyboard choice of axis (using standard SU keys) to toggle axis constraint on/off:
+##   red = Right Arrow, blue = Up or Down Arrow, green = Left Arrow
+## and constrained mouse moves to orientation around selected axis
+## Attempting to:
+## Implement keyboard choice of orientation of cross section of timber, 
+##   using Tab key to cycle through options - postponed this one
+
+## v0.54 2014-17-04
+## Moved sub-menu from Plugins to Draw, and renamed it Timber Frame
+## Added standard size 5" x 1" or 125mm x 25mm and moved Custom size index from 11 to 12 accordingly
+## Changed custom default size to 1/2" x 3/4" or 12.5mm x 19mm
+## Changed custom size to mean actual not nominal size, since all usual standard sizes are now covered
+
+## v0.53 2012-12-13
+## Clean up redundant comments, and more redundant code from original clinetool
+## Slightly amend face creation code to draw face at origin, then move it to pick point, so the 
+## resulting component will have its axes at a corner of the first face drawn.
+## Start trying to embody the pushpull length creation into the tool, not leave it as a separate operation 
+
+## v0.52 2012-12-10
+## Changed menu to read @n_size array directly instead of setting @c_menu
+## Finally fixed errors resulting from cancelling Custom size data entry 
+## - put in a test to check that 'results' are not nil before reading width and depth variables
+
+## v0.51 2012-12-08
+## Added choice of imperial or metric units, depending on model units
+## Still has some errors using Custom sizes but mostly works ok
+
+## v0.5 2012-12-08
+## Changed custom size input box to expect a Length value, not a Float, 
+##  and set standard imperial sizes to lengths as well
+## Fixed the effect of Cancelling entry into Custom Size inputbox - now cleans up properly
+## Chosen custom size now shows 'Custom ' before size 
+
+## v0.493 2012-12-06
+## Changed draw_geometry colours for long axis of component to show red, green or blue
+## depending on orientation of principal axis
+
+## v0.492 2012-12-06
+## Removed some leftovers from cline_tool original code no longer relevant
+
+## v0.491 2012-12-05
+## Trying to remove leftovers from cline_tool original code no longer relevant
+
+## v0.49 2012-12-05
+## Tidying up bugs in remembering custom sizes, and in initiating standard nominal sizes
+## v0.481 2012-12-05
+## Fixed several bugs in setting Custom R-click menu, drawing Custom size timber; moved some startup settings to Initialize section instead of Activate section
+
+2012-12-12-05 v0.49
+Attempting to tidy up and remove remnant parts of cline_tool.rb coding that draw different styles of dotted/dashed line with or without start points. Left working version 0.481 as fallback
+
+2012-12-12-05 v0.48x
+After breaking things, realised that I was not loading the current version, and reverted to using the version in the C:\r\ folder. 
+
+2012-12-02 v0.47
+After long gap I lost the plot here and started editing version in Sketchup Plugins folder, while still loading /r/ version. Couldn't understand why changes weren't apparently 'sticking'.
+
+2012-05-25 v0.46
+Added ability to choose (and remember) one Custom size (nominal)
+
+2012-05-10 v0.45
+Prefixed new component definition with size (not just static text '2x1' previously used for testing).
+Can't yet see how to get it to include length in component name
+Added popup inputbox to set (one) Custom size - but it doesn't remember it for next frame element drawn and repeats custom size popup indefinitely.
+
+2012-05-08 v0.44 
+Create component definition name only if unique: check new component against existing ones - tried and failed to do this, and made file unusable
+Reverted to v0.43
+
+2012-05-07 v0.43
+Moved timber size setup into 'activate' method
+Added context menu to select timber size
+
+2012-05-06 v0.42
+Now works for non-orthogonal planes 
+Added range of standard UK timber sizes, selectable by Class variable @@size_index
+Added text at cursor to show size being drawn as [width,depth] using float variables
+
+
+2012-05-05 v0.41
+Got cross-section and drawn component to draw at pick point
+Added cmd icons and cursor image
