@@ -19,7 +19,8 @@ If possible, make it single undo to remove not only component drawn by PushPull 
 
 ## v0.57 started 2014-11-25 10:18 AM
 ## Attempting to draw geometry and create geometry around face.normal 
-##   if first click is on NON-orthogonal face
+##   if first click is on NON-orthogonal face. Made substantial progress, then it all went wrong!
+## Reverting to v0.56, changing to use GitHub source control.
 
 ## v0.56 2014-11-25 10:15 AM
 ## Orient long axis vector parallel to face.normal 
