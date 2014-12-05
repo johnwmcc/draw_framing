@@ -28,13 +28,15 @@ module JWM
 class DrawFraming
 #------------------
   puts "****************************"
-  puts "draw_framing.rb v0.6x loaded"
+  puts "draw_framing.rb v0.6.0.1 loaded"
   
-  # Declare array to hold current nominal sizes as lengths
-		@@size_index = 1
-		@@nom_size = [0.0.to_l,0.0.to_l] 
-  # Declare array to hold last defined custom size
-		@@custom_size = ["Custom default",0.0.to_l,0.0.to_l]
+  # Set up class variables to hold details of standard sizes of timber
+		@@profile_name = "PAR" # Key to currently selected profile type such as PAR, architrave etc 
+    # Set initial default for size_index to select 2 x 1 inch or 50x25mm nominal size		
+    @@size_index = 1 
+
+    # Declare array to hold last defined custom size 
+		@@custom_size = ["PAR", "Custom default",0.0.to_l,0.0.to_l]
   # Declare variables for later use
 		@@PushPullToolID = 21041
 		@@suspended = false
@@ -49,7 +51,14 @@ class DrawFraming
     @@axis_lock = X_AXIS
 
   def initialize
-
+    # Get model units (imperial or metric)
+		model = Sketchup.active_model
+		manager = model.options
+		if provider = manager['UnitsOptions'] # Check for nil value
+			@length_unit = provider['LengthUnit']
+		else 
+			UI.messagebox " Can't determine model units - please set them in Window/ModelInfo"
+		end # if	
 
     # This is the standard Ruby initialize method that is called when you create
     # a new object.
@@ -60,10 +69,81 @@ class DrawFraming
     cursor = File.join(File.dirname(__FILE__), "framing_cursor.png")
     cursor_id = nil
     if cursor
-    # Create the cursor with the hot spot at top left (0,0) of image
+    # Create the cursor with the hot spot at top left (0,0) of image: 0 from left, 0 down from top
      @cursor_id = UI.create_cursor(cursor, 0, 0)
     end
+    @profile = profile "PAR", @@size_index # Select profile (defaults to  2x1 timber)
+    # Select profile array elements from 1 to last (-1), omitting size label in profile[0]
+    @points = @profile[1..-1]
+    puts "Profile points = " + @points.inspect.to_s 
   end # initialize
+
+#------------------
+  # Define profile of cross-section to be drawn
+  # Profile is defined by two labels, followed by an array of points 
+  #  which define a 2D polyline for the cross-section
+  # Profile array elements:
+  # 0 - (string) profile name (e.g., PAR, architrave, skirting, coving, moulding xxx)
+  # 1 - (string) profile size (e.g., 2x1, 50x25)
+  # 2 - (Array) 3d points defining cross section: minimum of three points. Must be coplanar with z=0 
+  def profile   p_name, p_size
+    # Calculate cross section array from dimensions for PAR
+    case p_name
+    when "PAR"
+      case @length_unit
+				when 0..1 # Units are imperial (inches or feet)
+				## Define standard imperial timber sizes (nominal and actual)
+					@n_size=[]
+					@n_size[0]=['1 x 1',0.875.inch,0.875.inch]
+					@n_size[1]=['2 x 1',1.75.inch,0.875.inch]
+					@n_size[2]=['3 x 1',2.75.inch,0.875.inch]
+					@n_size[3]=['4 x 1',3.75.inch,0.875.inch]
+					@n_size[4]=['5 x 1',4.75.inch,0.875.inch]
+          @n_size[5]=['6 x 1',5.75.inch,0.875.inch]
+					@n_size[6]=['2 x 2',1.75.inch,1.75.inch]
+					@n_size[7]=['3 x 2',2.75.inch,1.75.inch]
+					@n_size[8]=['4 x 2',3.75.inch,1.75.inch]
+					@n_size[9]=['6 x 2',5.75.inch,1.75.inch]
+					@n_size[10]=['3 x 3',2.75.inch,2.75.inch]
+					@n_size[11]=['4 x 4',3.75.inch,3.75.inch]		
+
+					if @@custom_size[1] == 0.0 # if custom size hasn't been set, put in a default (actual) size 
+						@@custom_size = ['Custom default 1/2" x 3/4"',0.5.inch,0.75.inch]
+					end
+
+					when 2..4 # Units are metric (mm, cm, or metres)
+				## Define standard metric nominal timber sizes
+					@n_size=[]
+					@n_size[0]=['25 x 25 mm',22.0.mm, 22.0.mm]
+					@n_size[1]=['50 x 25 mm',44.0.mm, 22.0.mm]
+					@n_size[2]=['75 x 25 mm',69.0.mm, 22.0.mm]
+					@n_size[3]=['100 x 25 mm',94.0.mm, 22.0.mm]
+					@n_size[4]=['125 x 25 mm',119.0.mm, 22.0.mm]
+					@n_size[5]=['150 x 25 mm',144.0.mm, 22.0.mm]
+          @n_size[6]=['50 x 50 mm',44.0.mm, 44.0.mm]
+					@n_size[7]=['75 x 50 mm',69.0.mm, 44.0.mm]
+					@n_size[8]=['100 x 50 mm',94.0.mm, 44.0.mm]
+					@n_size[9]=['150 x 50 mm',144.0.mm, 44.0.mm]
+					@n_size[10]=['75 x 75 mm',69.0.mm, 69.0.mm]
+					@n_size[11]=['100 x 100 mm',94.0.mm, 94.0.mm]
+
+					if @@custom_size[1] == 0.0	# if custom size hasn't been set, put in a default size 
+						@@custom_size = ["Custom default 13mm x 19mm ",13.mm,19.mm] 
+					end 
+				else # Something else 
+					UI.messagebox "Model units are not defined"
+			end # case @length_unit
+      
+      # Calculate profile points for selected PAR size
+      width = @n_size[p_size][1]
+      thickness = @n_size[p_size][2]
+      # PAR is simply a rectangle with width and thickness, drawn in the x, y (red/green) plane
+      profile = [@n_size[p_size][0],[0,0,0],[width,0,0],[width,thickness,0],[0,thickness,0],[0,0,0]]
+    else
+      UI.messagebox "Sorry, that profile name isn't defined yet"
+    end #case p_name
+    
+  end
 
 #------------------
   def activate
@@ -76,9 +156,15 @@ class DrawFraming
     @ip2        = Sketchup::InputPoint.new
     @drawn      = false
     @last_drawn = nil
-    Sketchup::set_status_text("Length", SB_VCB_LABEL)
+    Sketchup::set_status_text("Pick first corner for timber profile", SB_PROMPT)
+    # Get profile of default or last selected size
+    
+    @profile = profile "PAR", @@size_index # Select profile according to profile name and size
+    # Select profile array elements from 1 to last (-1), omitting size label in profile[0]
+    @points = @profile[1..-1]
+#    puts "Profile points = " + @points.inspect.to_s 
     self.reset(nil)
-    @cursor_text = "\n\nTest"
+    @cursor_text = "\n\n" + @profile[0]
   end # activate
 
 #------------------
@@ -228,7 +314,36 @@ class DrawFraming
 #------------------
   def draw view
     puts "draw called"
-    # Display cursor text to give feedback at cursor (about profile/size being placed)
+    # This code highlights potential inference points and draws dotted inference lines between 
+    #   existing geometry and current mouse position
+    if( @ip1.valid? )
+      if( @ip1.display? )
+        @ip1.draw(view)
+        @drawn = true
+      end
+
+      if( @ip2.valid? )
+        @ip2.draw(view) if( @ip2.display? )
+
+        # The set_color_from_line method determines what color
+        # to use to draw a line based on its direction.	For example
+        # red, green or blue.
+        if view.inference_locked?
+        line_width = 2
+        else
+        line_width = 1
+        end
+        view.line_width = line_width
+        # option for type of dotted line to draw (not used here)
+        # view.line_stipple = @opts['stipple']
+        view.set_color_from_line(@ip1, @ip2)
+        # Draw feedback geometry to show where object to be created will be placed
+        self.draw_geometry(@ip1.position, @ip2.position, view)
+        @drawn = true
+      end
+		end
+    # Display cursor text to give feedback at cursor about what 
+    #   size/type of object will be placed
     view.draw_text view.screen_coords(@ip1.position), @cursor_text  
   end
 
@@ -253,7 +368,9 @@ class DrawFraming
 #------------------
 ## Draw the geometry to show where the cross-section will be placed
 	def draw_geometry(pt1, pt2, view)
-      puts "draw_geometry called"
+    puts "draw_geometry called"
+    
+      
   end  
   
 #------------------
