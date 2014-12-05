@@ -112,7 +112,7 @@ class DrawFraming
 					end
 
 					when 2..4 # Units are metric (mm, cm, or metres)
-				## Define standard metric nominal timber sizes
+				## Define standard metric timber sizes (nominal and actual)
 					@n_size=[]
 					@n_size[0]=['25 x 25 mm',22.0.mm, 22.0.mm]
 					@n_size[1]=['50 x 25 mm',44.0.mm, 22.0.mm]
