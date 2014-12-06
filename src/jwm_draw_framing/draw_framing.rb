@@ -1,5 +1,6 @@
 ﻿## Draw Framing v0.6 rewrite from scratch
-## D:\Documents\GitHub\draw_framing\src\draw_framing\draw_framing.rb
+## D:\Documents\GitHub\draw_framing\src\jwm_draw_framing\draw_framing.rb
+## load "jwm_draw_framing/draw_framing.rb"
 ## Name: Draw Framing Tool
 ## Sketchup Extension plugin
 ## Tool to help draw Timber Frames using standard (UK) softwood timber sizes and custom sizes
@@ -28,15 +29,14 @@ module JWM
 class DrawFraming
 #------------------
   puts "****************************"
-  puts "draw_framing.rb v0.6.0.1 loaded"
+  puts "draw_framing.rb v0.6.0.2 loaded"
   
   # Set up class variables to hold details of standard sizes of timber
 		@@profile_name = "PAR" # Key to currently selected profile type such as PAR, architrave etc 
     # Set initial default for size_index to select 2 x 1 inch or 50x25mm nominal size		
     @@size_index = 1 
 
-    # Declare array to hold last defined custom size 
-		@@custom_size = ["PAR", "Custom default",0.0.to_l,0.0.to_l]
+
   # Declare variables for later use
 		@@PushPullToolID = 21041
 		@@suspended = false
@@ -61,7 +61,7 @@ class DrawFraming
 		end # if	
 
     # This is the standard Ruby initialize method that is called when you create
-    # a new object.
+    # a new Tool object.
     @ip1 = nil
     @ip2 = nil
     @xdown = 0
@@ -72,85 +72,37 @@ class DrawFraming
     # Create the cursor with the hot spot at top left (0,0) of image: 0 from left, 0 down from top
      @cursor_id = UI.create_cursor(cursor, 0, 0)
     end
-    @profile = profile "PAR", @@size_index # Select profile (defaults to  2x1 timber)
-    # Select profile array elements from 1 to last (-1), omitting size label in profile[0]
-    @points = @profile[1..-1]
-    puts "Profile points = " + @points.inspect.to_s 
+    # Declare blank array for nominal sizes
+    @n_size = []
+    # Declare array to hold last defined custom size 
+		@@custom_size = ["Custom default",0.0.to_l,0.0.to_l]
   end # initialize
-
-#------------------
-  # Define profile of cross-section to be drawn
-  # Profile is defined by two labels, followed by an array of points 
-  #  which define a 2D polyline for the cross-section
-  # Profile array elements:
-  # 0 - (string) profile name (e.g., PAR, architrave, skirting, coving, moulding xxx)
-  # 1 - (string) profile size (e.g., 2x1, 50x25)
-  # 2 - (Array) 3d points defining cross section: minimum of three points. Must be coplanar with z=0 
-  def profile   p_name, p_size
-    # Calculate cross section array from dimensions for PAR
-    case p_name
-    when "PAR"
-      case @length_unit
-				when 0..1 # Units are imperial (inches or feet)
-				## Define standard imperial timber sizes (nominal and actual)
-					@n_size=[]
-					@n_size[0]=['1 x 1',0.875.inch,0.875.inch]
-					@n_size[1]=['2 x 1',1.75.inch,0.875.inch]
-					@n_size[2]=['3 x 1',2.75.inch,0.875.inch]
-					@n_size[3]=['4 x 1',3.75.inch,0.875.inch]
-					@n_size[4]=['5 x 1',4.75.inch,0.875.inch]
-          @n_size[5]=['6 x 1',5.75.inch,0.875.inch]
-					@n_size[6]=['2 x 2',1.75.inch,1.75.inch]
-					@n_size[7]=['3 x 2',2.75.inch,1.75.inch]
-					@n_size[8]=['4 x 2',3.75.inch,1.75.inch]
-					@n_size[9]=['6 x 2',5.75.inch,1.75.inch]
-					@n_size[10]=['3 x 3',2.75.inch,2.75.inch]
-					@n_size[11]=['4 x 4',3.75.inch,3.75.inch]		
-
-					if @@custom_size[1] == 0.0 # if custom size hasn't been set, put in a default (actual) size 
-						@@custom_size = ['Custom default 1/2" x 3/4"',0.5.inch,0.75.inch]
-					end
-
-					when 2..4 # Units are metric (mm, cm, or metres)
-				## Define standard metric timber sizes (nominal and actual)
-					@n_size=[]
-					@n_size[0]=['25 x 25 mm',22.0.mm, 22.0.mm]
-					@n_size[1]=['50 x 25 mm',44.0.mm, 22.0.mm]
-					@n_size[2]=['75 x 25 mm',69.0.mm, 22.0.mm]
-					@n_size[3]=['100 x 25 mm',94.0.mm, 22.0.mm]
-					@n_size[4]=['125 x 25 mm',119.0.mm, 22.0.mm]
-					@n_size[5]=['150 x 25 mm',144.0.mm, 22.0.mm]
-          @n_size[6]=['50 x 50 mm',44.0.mm, 44.0.mm]
-					@n_size[7]=['75 x 50 mm',69.0.mm, 44.0.mm]
-					@n_size[8]=['100 x 50 mm',94.0.mm, 44.0.mm]
-					@n_size[9]=['150 x 50 mm',144.0.mm, 44.0.mm]
-					@n_size[10]=['75 x 75 mm',69.0.mm, 69.0.mm]
-					@n_size[11]=['100 x 100 mm',94.0.mm, 94.0.mm]
-
-					if @@custom_size[1] == 0.0	# if custom size hasn't been set, put in a default size 
-						@@custom_size = ["Custom default 13mm x 19mm ",13.mm,19.mm] 
-					end 
-				else # Something else 
-					UI.messagebox "Model units are not defined"
-			end # case @length_unit
-      
-      # Calculate profile points for selected PAR size
-      width = @n_size[p_size][1]
-      thickness = @n_size[p_size][2]
-      # PAR is simply a rectangle with width and thickness, drawn in the x, y (red/green) plane
-      profile = [@n_size[p_size][0],[0,0,0],[width,0,0],[width,thickness,0],[0,thickness,0],[0,0,0]]
-    else
-      UI.messagebox "Sorry, that profile name isn't defined yet"
-    end #case p_name
-    
-  end
 
 #------------------
   def activate
     puts "activate called"
-    # The Sketchup::InputPoint class is used to get 3D points from screen
-    # positions.  It uses the SketchUp inferencing code.
-    # In this tool, we will have one insertion point and a second to determin orientation.
+
+		# Set default timber size to 2" x 1" or 50 x 25mm (@chosen_size index = 1) if no size is set
+		if !@chosen_size 
+			@chosen_size = @@size_index # Size index was initialized to 1, or gets set later to be remembered here
+		end
+    # Update remembered timber size			
+		@@size_index = @chosen_size 
+    ## Build context menu array to display on R-click, to select timber size
+		if @chosen_size >= 12 && @@custom_size[2] != 0# Then pop up a menu to set Custom Size(s)
+			prompts = "Width", "Depth"
+			values = [@@custom_size[1],@@custom_size[2]]
+				results = inputbox prompts,	values, "Enter Custom Size (actual)"
+			if results #not nil
+				width, depth = results
+				s_label = "Custom (actual) " + width.to_s + ' x ' + depth.to_s
+				@@custom_size = [s_label,width.to_l ,depth.to_l ]
+			end 
+		end
+    # puts "Chosen_size index = " + @chosen_size.to_s  
+    # The Sketchup::InputPoint class is used to get 3D points from screen positions
+    # It uses the SketchUp inferencing code.
+    # In this tool, we will have one insertion point and a second to determine orientation.
     @ip         = Sketchup::InputPoint.new
     @ip1        = Sketchup::InputPoint.new
     @ip2        = Sketchup::InputPoint.new
@@ -159,12 +111,13 @@ class DrawFraming
     Sketchup::set_status_text("Pick first corner for timber profile", SB_PROMPT)
     # Get profile of default or last selected size
     
-    @profile = profile "PAR", @@size_index # Select profile according to profile name and size
-    # Select profile array elements from 1 to last (-1), omitting size label in profile[0]
-    @points = @profile[1..-1]
-#    puts "Profile points = " + @points.inspect.to_s 
+    @profile = profile "PAR", @chosen_size # Select profile according to profile name and size
+# puts @profile[0,2].inspect
+    # Select profile array elements from 2 to last (-1), omitting 
+    #   profile name in profile[0] and size label in profile[1]
+    @points = @profile[2..-1]
+puts "Profile points = " + @points.inspect.to_s 
     self.reset(nil)
-    @cursor_text = "\n\n" + @profile[0]
   end # activate
 
 #------------------
@@ -174,7 +127,7 @@ class DrawFraming
 
 #------------------
   def onSetCursor
-#    puts "setCursor called"
+# puts "setCursor called"
     # Set the cursor to selected instance variable ID
     UI.set_cursor @cursor_id
   end # setCursor
@@ -202,9 +155,9 @@ class DrawFraming
             view.tooltip = @ip1.tooltip
         end
         when 1
-      puts "Mouse move called @state = " + @state.to_s
+# puts "Mouse move called @state = " + @state.to_s
       when 2
-      puts "Mouse move called @state = " + @state.to_s
+# puts "Mouse move called @state = " + @state.to_s
     end
   end # onMouseMove
   
@@ -252,7 +205,8 @@ class DrawFraming
 #------------------
   def onRButtonDown flags, x, y, view
     puts "onRButtonDown called"
-#		getMenu()
+    # Load plugin-specific R-click context menu
+		getMenu()
 	end
 
 #------------------
@@ -354,6 +308,76 @@ class DrawFraming
       puts "onCancel called"
 		self.reset(view)
 	end
+
+#------------------
+  # Define profile of cross-section to be drawn
+  # Profile is defined by two labels, followed by an array of points 
+  #  which define a 2D polyline for the cross-section
+  # Profile array elements:
+  # 0 - (string) profile name (e.g., PAR, architrave, skirting, coving, moulding xxx)
+  # 1 - (string) profile size (e.g., 2x1, 50x25)
+  # 2 - (Array) 3d points defining cross section: minimum of three points. Must be coplanar with z=0 
+  def profile   p_name, p_size
+    # Calculate cross section array from dimensions for PAR
+    case p_name
+    when "PAR"
+      case @length_unit
+				when 0..1 # Units are imperial (inches or feet)
+				## Define standard imperial timber sizes (nominal and actual)
+					@n_size=[]
+					@n_size[0]=['1 x 1',0.875.inch,0.875.inch]
+					@n_size[1]=['2 x 1',1.75.inch,0.875.inch]
+					@n_size[2]=['3 x 1',2.75.inch,0.875.inch]
+					@n_size[3]=['4 x 1',3.75.inch,0.875.inch]
+					@n_size[4]=['5 x 1',4.75.inch,0.875.inch]
+          @n_size[5]=['6 x 1',5.75.inch,0.875.inch]
+					@n_size[6]=['2 x 2',1.75.inch,1.75.inch]
+					@n_size[7]=['3 x 2',2.75.inch,1.75.inch]
+					@n_size[8]=['4 x 2',3.75.inch,1.75.inch]
+					@n_size[9]=['6 x 2',5.75.inch,1.75.inch]
+					@n_size[10]=['3 x 3',2.75.inch,2.75.inch]
+					@n_size[11]=['4 x 4',3.75.inch,3.75.inch]		
+
+					if @@custom_size[1] == 0.0 # if custom size hasn't been set, put in a default (actual) size 
+						@@custom_size = ['Custom default 1/2 x 3/4',0.5.inch,0.75.inch]
+					end
+          
+          @n_size[12] = @@custom_size
+
+					when 2..4 # Units are metric (mm, cm, or metres)
+				## Define standard metric timber sizes (nominal and actual)
+					@n_size=[]
+					@n_size[0]=['25 x 25 mm',22.0.mm, 22.0.mm]
+					@n_size[1]=['50 x 25 mm',44.0.mm, 22.0.mm]
+					@n_size[2]=['75 x 25 mm',69.0.mm, 22.0.mm]
+					@n_size[3]=['100 x 25 mm',94.0.mm, 22.0.mm]
+					@n_size[4]=['125 x 25 mm',119.0.mm, 22.0.mm]
+					@n_size[5]=['150 x 25 mm',144.0.mm, 22.0.mm]
+          @n_size[6]=['50 x 50 mm',44.0.mm, 44.0.mm]
+					@n_size[7]=['75 x 50 mm',69.0.mm, 44.0.mm]
+					@n_size[8]=['100 x 50 mm',94.0.mm, 44.0.mm]
+					@n_size[9]=['150 x 50 mm',144.0.mm, 44.0.mm]
+					@n_size[10]=['75 x 75 mm',69.0.mm, 69.0.mm]
+					@n_size[11]=['100 x 100 mm',94.0.mm, 94.0.mm]
+
+					if @@custom_size[1] == 0.0	# if custom size hasn't been set, put in a default size 
+						@@custom_size = ["Custom default 13mm x 19mm ",13.mm,19.mm] 
+					end 
+          
+          @n_size[12] = @@custom_size
+				else # Something else 
+					UI.messagebox "Model units are not defined"
+			end # case @length_unit
+      
+      # Calculate profile points for selected PAR size
+      width = @n_size[p_size][1]
+      thickness = @n_size[p_size][2]
+      # PAR is simply a rectangle with width and thickness, drawn in the x, y (red/green) plane
+      profile = ["PAR", @n_size[p_size][0],[0,0,0],[width,0,0],[width,thickness,0],[0,thickness,0],[0,0,0]]
+    else
+      UI.messagebox "Sorry, that profile name isn't defined yet"
+    end #case p_name
+  end # profile
   
 #------------------
 	# The following methods are not directly called from SketchUp.	They are
@@ -397,13 +421,11 @@ class DrawFraming
 #------------------
 
  def getMenu(menu)
-   puts "getMenu called"
+#   puts "getMenu called"
 	menu.add_item("Timber size (nominal)") { puts("Select timber size from context menu") } 
 	menu.add_separator
-	#puts @n_size.inspect
-	#puts @c_menu.inspect
-	# @n_size.each_index {|i|
-			# menu.add_item(@n_size[i][0]) {@chosen_size = i; @cursor_text = "\n\n" + @n_size[i][0]; self.activate}}
+	 @n_size.each_index {|i|
+			menu.add_item(@n_size[i][0]) {@chosen_size = i; @cursor_text = "\n\n" + @n_size[i][0]; self.activate}}
  end
  
 #------------------
