@@ -1,5 +1,5 @@
 ﻿## Draw Framing v0.6 rewrite from scratch
-## D:\Documents\GitHub\draw_framing\src\jwm_draw_framing\draw_framing.rb
+## D:\Documents\GitHub\draw_framing\src\draw_framing\draw_framing.rb
 ## load "jwm_draw_framing/draw_framing.rb"
 ## Name: Draw Framing Tool
 ## Sketchup Extension plugin
@@ -29,7 +29,7 @@ module JWM
 class DrawFraming
 #------------------
   puts "****************************"
-  puts "draw_framing.rb v0.6.0.2 loaded"
+  puts "draw_framing.rb v0.6.0.3 loaded"
   
   # Set up class variables to hold details of standard sizes of timber
 		@@profile_name = "PAR" # Key to currently selected profile type such as PAR, architrave etc 
@@ -95,7 +95,7 @@ class DrawFraming
 				results = inputbox prompts,	values, "Enter Custom Size (actual)"
 			if results #not nil
 				width, depth = results
-				s_label = "Custom (actual) " + width.to_s + ' x ' + depth.to_s
+				s_label = width.to_s + ' x ' + depth.to_s
 				@@custom_size = [s_label,width.to_l ,depth.to_l ]
 			end 
 		end
@@ -339,7 +339,7 @@ puts "Profile points = " + @points.inspect.to_s
 					@n_size[11]=['4 x 4',3.75.inch,3.75.inch]		
 
 					if @@custom_size[1] == 0.0 # if custom size hasn't been set, put in a default (actual) size 
-						@@custom_size = ['Custom default 1/2 x 3/4',0.5.inch,0.75.inch]
+						@@custom_size = ['1/2 x 3/4',0.5.inch,0.75.inch]
 					end
           
           @n_size[12] = @@custom_size
@@ -361,7 +361,7 @@ puts "Profile points = " + @points.inspect.to_s
 					@n_size[11]=['100 x 100 mm',94.0.mm, 94.0.mm]
 
 					if @@custom_size[1] == 0.0	# if custom size hasn't been set, put in a default size 
-						@@custom_size = ["Custom default 13mm x 19mm ",13.mm,19.mm] 
+						@@custom_size = ["13mm x 19mm ",13.mm,19.mm] 
 					end 
           
           @n_size[12] = @@custom_size
@@ -422,10 +422,18 @@ puts "Profile points = " + @points.inspect.to_s
 
  def getMenu(menu)
 #   puts "getMenu called"
-	menu.add_item("Timber size (nominal)") { puts("Select timber size from context menu") } 
+	menu.add_item("Timber size (nominal)") {} 
 	menu.add_separator
-	 @n_size.each_index {|i|
-			menu.add_item(@n_size[i][0]) {@chosen_size = i; @cursor_text = "\n\n" + @n_size[i][0]; self.activate}}
+	@n_size[0..11].each_index {|i|
+			item = menu.add_item(@n_size[i][0]) {@chosen_size = i;@cursor_text = "\n\n" + @n_size[i][0];
+      self.activate}
+      menu.set_validation_proc(item) {if i==@chosen_size then MF_CHECKED; else MF_UNCHECKED; end;}}
+  menu.add_separator
+  menu.add_item("Custom size (actual)") {} 
+  menu.add_separator
+	item = menu.add_item(@n_size[12][0]) {@chosen_size = 12; @cursor_text = "\n\n" + @n_size[12][0]
+  self.activate}
+  menu.set_validation_proc(item) {if 12==@chosen_size then MF_CHECKED; else MF_UNCHECKED; end;}
  end
  
 #------------------
