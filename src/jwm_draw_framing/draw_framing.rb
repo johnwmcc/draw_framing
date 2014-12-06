@@ -29,7 +29,7 @@ module JWM
 class DrawFraming
 #------------------
   puts "****************************"
-  puts "draw_framing.rb v0.6.0.3 loaded"
+  puts "draw_framing.rb v0.6.0.4 loaded"
   
   # Set up class variables to hold details of standard sizes of timber
 		@@profile_name = "PAR" # Key to currently selected profile type such as PAR, architrave etc 
@@ -113,6 +113,7 @@ class DrawFraming
     
     @profile = profile "PAR", @chosen_size # Select profile according to profile name and size
 # puts @profile[0,2].inspect
+    @cursor_text = "\n\n" + @profile[1] # Display chosen size at cursor
     # Select profile array elements from 2 to last (-1), omitting 
     #   profile name in profile[0] and size label in profile[1]
     @points = @profile[2..-1]
@@ -422,16 +423,17 @@ puts "Profile points = " + @points.inspect.to_s
 
  def getMenu(menu)
 #   puts "getMenu called"
+  menu.add_item(@profile[0]) {} # Displays type of timber (only PAR implemented so far)
 	menu.add_item("Timber size (nominal)") {} 
 	menu.add_separator
 	@n_size[0..11].each_index {|i|
-			item = menu.add_item(@n_size[i][0]) {@chosen_size = i;@cursor_text = "\n\n" + @n_size[i][0];
+			item = menu.add_item(@n_size[i][0]) {@chosen_size = i; @cursor_text = "\n\n" + @n_size[i][0];
       self.activate}
       menu.set_validation_proc(item) {if i==@chosen_size then MF_CHECKED; else MF_UNCHECKED; end;}}
   menu.add_separator
   menu.add_item("Custom size (actual)") {} 
   menu.add_separator
-	item = menu.add_item(@n_size[12][0]) {@chosen_size = 12; @cursor_text = "\n\n" + @n_size[12][0]
+	item = menu.add_item(@n_size[12][0]) {@chosen_size = 12; @cursor_text = "\n\n" + @n_size[12][0];
   self.activate}
   menu.set_validation_proc(item) {if 12==@chosen_size then MF_CHECKED; else MF_UNCHECKED; end;}
  end
