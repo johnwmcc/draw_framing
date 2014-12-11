@@ -29,13 +29,12 @@ module JWM
 class DrawFraming
 #------------------
   puts "****************************"
-  puts "draw_framing.rb v0.6.0.4 loaded"
+  puts "draw_framing.rb v0.6.0.5 loaded"
   
   # Set up class variables to hold details of standard sizes of timber
 		@@profile_name = "PAR" # Key to currently selected profile type such as PAR, architrave etc 
     # Set initial default for size_index to select 2 x 1 inch or 50x25mm nominal size		
     @@size_index = 1 
-
 
   # Declare variables for later use
 		@@PushPullToolID = 21041
@@ -44,11 +43,11 @@ class DrawFraming
   # Establish array to store axis toggle state
   # Axis_lock = one of the AXES if locked, or Vector3d(0,0,0) for not locked
     @@axis_lock = Geom::Vector3d.new
-    # Default initially to (red) x-axis for long dimension of timber
+    # Default initially to (blue) z-axis for long dimension of timber
     #   to avoid problems if first pick is not on a face and no axis 
     #   has been specified by arrow key
     
-    @@axis_lock = X_AXIS
+    @@axis_lock = Z_AXIS
 
   def initialize
     # Get model units (imperial or metric)
@@ -76,6 +75,10 @@ class DrawFraming
     @n_size = []
     # Declare array to hold last defined custom size 
 		@@custom_size = ["Custom default",0.0.to_l,0.0.to_l]
+    # Declare vector to become the direction of the long axis of timber to be placed
+    # @long_axis = Geom::Vector3d.new 0,0,0
+    
+
   end # initialize
 
 #------------------
@@ -117,7 +120,7 @@ class DrawFraming
     # Select profile array elements from 2 to last (-1), omitting 
     #   profile name in profile[0] and size label in profile[1]
     @points = @profile[2..-1]
-puts "Profile points = " + @points.inspect.to_s 
+# puts "Profile points = " + @points.inspect.to_s 
     self.reset(nil)
   end # activate
 
@@ -137,8 +140,8 @@ puts "Profile points = " + @points.inspect.to_s
   def onMouseMove flags, x, y, view
     case@state
     when 0
-##        puts "Mouse move called @state = " + @state.to_s
-        # We are getting the first end of the line.  Call the pick method
+# puts "Mouse move called @state = " + @state.to_s
+        # We are get ting the first end of the line.  Call the pick method
         # on the InputPoint to get a 3D position from the 2D screen position
         # that is bassed as an argument to this method.
         @ip.pick view, x, y
@@ -156,9 +159,29 @@ puts "Profile points = " + @points.inspect.to_s
             view.tooltip = @ip1.tooltip
         end
         when 1
-# puts "Mouse move called @state = " + @state.to_s
+			# Getting the second pick point which defines the orientation of the timber cross-section
+			# If you pass in another InputPoint on the pick method of InputPoint
+			# it uses that second point to do additional inferencing such as
+			# parallel to an axis.
+      @ip2.pick view, x, y, @ip1
+			view.tooltip = @ip2.tooltip if( @ip2.valid? )
+
+			# Update the length displayed in the VCB
+			if( @ip2.valid? )
+				length = @ip1.position.distance(@ip2.position)
+				Sketchup::set_status_text length.to_s, SB_VCB_VALUE
+			end
+
+			# Check to see if the mouse was moved far enough to confirm the orientation of the chosen cross-section
+			# This is used so that you can create a cross-section by either dragging
+			# or doing click-move-click
+			if( (x-@xdown).abs > 10 || (y-@ydown).abs > 10 )
+				@dragging = true
+			end
+			view.invalidate
+
       when 2
-# puts "Mouse move called @state = " + @state.to_s
+ # puts "Mouse move called @state = " + @state.to_s
     end
   end # onMouseMove
   
@@ -166,33 +189,98 @@ puts "Profile points = " + @points.inspect.to_s
   def onLButtonDown flags, x, y, view
     puts "onLbuttonDown called"
 
-		# When the user clicks the first time (@state == 1), we switch to getting the
+		# When the user clicks the first time (@state changes from 0 to 1), we switch to getting the
 		# second point.	When they click a second time we show the planned cross-section
 		case @state
     when 0
 			@ip1.pick view, x, y
 				if( @ip1.valid? )
-						# call the transformation method to get the component/group instance Transformation vector
-            # from origin to first pick point
-						@tf = @ip1.transformation
-						@state = 1
-						txt = "Select plane of cross section using cursor (arrow) keys - red = Right, green = Left, blue = up or down "
-						Sketchup::set_status_text(txt, SB_PROMPT)
+          # call the transformation method to get the component/group instance Transformation vector
+          # from origin to first pick point
+          @tf = @ip1.transformation
+# puts "@tf = " + @tf.inspect.to_s
+          @state = 1
+          txt = "Select plane of cross section using cursor (arrow) keys - red = Right, green = Left, blue = up or down "
+          Sketchup::set_status_text(txt, SB_PROMPT)
+          # Create new transformation objects (the identity transformation by default) for later use
+          # or recalculated below if a point on a face was picked 
+          @tf3 = Geom::Transformation.new
+          @tf4 = Geom::Transformation.new
+          @tf5 = Geom::Transformation.new
+          ## Detect if pick point is on a face, and if so, orient long axis normal to it
+          if @ip.face
+            f = @ip.face
+            @@axis_lock= f.normal
+# puts  "Face picked: normal is " + f.normal.inspect.to_s
+
+            # Calculate vector which is the projection of the face normal onto the rg plane
+            vec3 = Geom::Vector3d.new [f.normal.x, f.normal.y, 0]
+            if f.normal.y < 0.0
+              rotate3 = -(X_AXIS.angle_between vec3)
+            else
+              rotate3 = X_AXIS.angle_between vec3 
+            end #f.normal.y
+  puts "rotate3 angle = " + rotate3.radians.to_s
+            
+            # Set up transform to rotate the cross-section by this amount around Z_AXIS at world or component origin 
+            @tf3 = Geom::Transformation.rotation [0,0,0], Z_AXIS, rotate3
+            
+            # Calculate angle between face normal and the Z_AXIS
+            if f.normal.z >= 0.0 
+              rotate4 = f.normal.angle_between Z_AXIS
+            else
+              rotate4 = -(f.normal.angle_between Z_AXIS)
+            end
+  puts "rotate4 angle = " + rotate4.radians.to_s
+            
+            # Calculate the vector corresponding to the rotation axis for the second transformation,
+            # at rotate5 from the X_AXIS, which is at right angles to vec3 and in the rg plane
+            # rotate5 = (rotate3 + 90.degrees)
+            # @vec5 = Geom::Vector3d.new Math.cos(rotate5), Math.sin(rotate5),0.0
+            
+            # Calculate the rotation axis for the second transformation as the normal 
+            #   to the Z_AXIS/face normal plane, which is the cross-product of the 
+            #   face normal and the Z_AXIS vectors
+            if f.normal != Z_AXIS
+              @vec5 = Z_AXIS.cross f.normal
+            else
+              @vec5 = Z_AXIS
+            end # if f.normal
+            
+#  puts "@vec5 = " + @vec5.inspect.to_s
+
+            @tf4 = Geom::Transformation.rotation [0,0,0], @vec5, rotate4
+          else # no face at pick point
+            # Default axis lock to Z_AXIS if no lock set
+            if @@axis_lock == [0,0,0]
+              @@axis_lock= Z_AXIS
+            # When no face picked define @vec5 to avoid n
+            @vec5 = Z_AXIS
+            end 
+
+          end # if @ip.face
+          # Combine the transformations @tf3 and @tf4 if they exist, otherwise leave @tf5 
+          # as identity transform
+          if @tf3 && @tf4
+            @tf5 = @tf4 * @tf3
+          end
 				else
 					# txt << "on."
 					# txt << "TAB = stipple."
 					Sketchup::set_status_text(txt, SB_PROMPT)
 					@xdown = x
 					@ydown = y
-        end #if
+        end #if @ip1.valid?
 		when 1
 		# create the cross-section on the second click
 			if( @ip2.valid? )
 				self.create_geometry(@ip1.position, @ip2.position, view)
 				self.reset(view)
 			end # if
+    when 2
+      puts "@state = 2"
     else
-      puts "@state not between 0 and 1"
+      puts "@state not a valid value"
 		end #case
     # Clear any inference lock
     view.lock_inference
@@ -200,7 +288,16 @@ puts "Profile points = " + @points.inspect.to_s
   
 #------------------
   def onLButtonUp flags, x, y, view
-    puts "onLButtonUp called"
+# puts "onLButtonUp called"
+    # If we are doing a drag, then create the cross-section on the mouse up event
+		if @state == 1
+			if( @dragging && @ip2.valid? )
+				self.create_geometry(@ip1.position, @ip2.position,view)
+				self.reset(view)
+			end
+		elsif @state == 2 ## waiting for third click to define length of timber to draw
+
+		end
   end # onLButtonUp
 
 #------------------
@@ -229,29 +326,37 @@ puts "Profile points = " + @points.inspect.to_s
     when VK_RIGHT # Right arrow key pressed: toggle red axis lock on/off
       if @@axis_lock == X_AXIS then # Red axis lock was on: turn all axis locks off
         @@axis_lock = Geom::Vector3d.new 0,0,0
+        @cursor_text = "\n\n" + @profile[1]
       else
         @@axis_lock = X_AXIS # turn red axis lock on
+        @cursor_text = "\n\n" + @profile[1] + "\nX locked"
       end
     when VK_LEFT # Left arrow key pressed: toggle green axis lock on/off
-      if @@axis_lock == Y_AXIS then # Axis lock was on: turn all axis locks off
+      if @@axis_lock == Y_AXIS then # Y-axis lock was on: turn all axis locks off
         @@axis_lock = Geom::Vector3d.new 0,0,0
+        @cursor_text = "\n\n" + @profile[1]
       else
+      
        @@axis_lock = Y_AXIS # turn green axis lock on
+       @cursor_text = "\n\n" + @profile[1] + "\nY locked"
       end
     when VK_UP # Up  arrow key pressed: toggle blue axis lock on/off
       if @@axis_lock == Z_AXIS then # Axis lock was on: turn all axis locks off
         @@axis_lock = Geom::Vector3d.new 0,0,0
+        @cursor_text = "\n\n" + @profile[1]
       else
         @@axis_lock = Z_AXIS # turn blue axis lock on
+        @cursor_text = "\n\n" + @profile[1] + "\nZ locked"
       end
     when VK_DOWN  # Down arrow key pressed: toggle blue axis lock on/off
       if @@axis_lock == Z_AXIS then # Axis lock was on: turn all axis locks off
         @@axis_lock = Geom::Vector3d.new 0,0,0
       else
         @@axis_lock = Z_AXIS # turn blue axis lock on
+        @cursor_text = "\n\n" + @profile[1] + "\nZ locked"
       end
     end
-     puts"Selected axis = " + @@axis_lock.inspect.to_s
+#     puts"Selected axis = " + @@axis_lock.inspect.to_s
 
 
   end
@@ -268,7 +373,7 @@ puts "Profile points = " + @points.inspect.to_s
   
 #------------------
   def draw view
-    puts "draw called"
+# puts "draw called"
     # This code highlights potential inference points and draws dotted inference lines between 
     #   existing geometry and current mouse position
     if( @ip1.valid? )
@@ -278,6 +383,7 @@ puts "Profile points = " + @points.inspect.to_s
       end
 
       if( @ip2.valid? )
+# puts "@ip2 in 'draw' is valid"
         @ip2.draw(view) if( @ip2.display? )
 
         # The set_color_from_line method determines what color
@@ -374,7 +480,8 @@ puts "Profile points = " + @points.inspect.to_s
       width = @n_size[p_size][1]
       thickness = @n_size[p_size][2]
       # PAR is simply a rectangle with width and thickness, drawn in the x, y (red/green) plane
-      profile = ["PAR", @n_size[p_size][0],[0,0,0],[width,0,0],[width,thickness,0],[0,thickness,0],[0,0,0]]
+      # For testing, put in an angle
+      profile = ["PAR", @n_size[p_size][0],[0,0,0],[0.5*width,0,0],[width,0.5*thickness,0],[width,thickness,0],[0,thickness,0],[0,0,0]]
     else
       UI.messagebox "Sorry, that profile name isn't defined yet"
     end #case p_name
@@ -393,15 +500,73 @@ puts "Profile points = " + @points.inspect.to_s
 #------------------
 ## Draw the geometry to show where the cross-section will be placed
 	def draw_geometry(pt1, pt2, view)
-    puts "draw_geometry called"
+#    puts "draw_geometry called"
+    # Draw timber profile (by default around the Z_AXIS in the rg plane)
+    # Relocate drawn cross section to pick point location
+
+   
+    # Declare arrays to hold timber profile points
+		@profile_points = []
+    @profile_points1 = []
+    @profile_points0 = @profile[2..-1]
+# puts "Profile points = " + @profile_points.inspect.to_s
+    # Vector from component or world origin 
+    origin = @tf.origin
+# puts "origin = " + origin.inspect.to_s
+    vec = origin.vector_to(pt1) # Vector from there to pick point
+# puts "vec = " + vec.inspect.to_s
+    # Calculate transformation from component or world origin to first pick point
+    @tf2 = translate(@tf,vec) # Uses Martin Rinehart's translate function included below
+# puts "@tf2 = " + @tf2.inspect.to_s    
+    # Rotate about Z_AXIS at origin so as to be parallel in the x-y (rg) plane to the face normal.
+    @profile_points0.each_index {|i| @profile_points1[i] = @profile_points0[i].transform(@tf3)} 
+ 
+ # The profile needs to be revolved about the line 
+    #  which is normal to the Z_AZIS AND to the face.normal if on a face, 
+    #  unless the face.normal or @@axis_lock IS the Z_AXIS, in which case no revolution needed.
+    # And to get the normal, we took the cross-product of 
+    #  the Z_AZIS and the face.normal in onLButtonDown.
+
+		@profile_points1.each_index {|i| @profile_points[i] = @profile_points1[i].transform(@tf4)} 
+
+    # Relocate profile to first pick point (transform @tf2) 
+    @profile_points.each_index {|i| @profile_points[i] = @profile_points[i].transform(@tf2)}     
+
+
+
+ 
+#	puts "@profile_points[] = \n" + @profile_points.to_a.inspect
+
     
+    # Set direction of long axis of wood (normal to plane of cross-section)
+
+      @long_axis =  @@axis_lock
+      # newlen = @long_axis.length = 4.0
+# puts "Long axis = " + @long_axis.inspect.to_s  + " length = " + @long_axis.length  
+      # Display long axis as visual feedback
+      #@long_axis.transform!(@tf2)
+      view.line_width = 2; view.line_stipple = ""
+      view.set_color_from_line(pt1 - @long_axis, pt1 + @long_axis)
+      view.draw_line(pt1 - @long_axis, pt1 + @long_axis) # to show direction of long axis of wood  
       
-  end  
+
+      # end
+      # Draw normal to Z_AXIS/face.normal in orange
+# puts "@vec5.to_a = " + @vec5.inspect.to_s, @vec5.to_a.to_s
+      pt3 = @vec5.to_a.transform @tf2
+      view.drawing_color = "orange" 
+      view.draw_line(pt1,pt3)
+      
+      view.drawing_color = "magenta" 
+      view.draw_polyline(@profile_points)
+end    
+
   
 #------------------
 ## Create geometry for the cross-section in the model
   def create_geometry(p1, p2, view)
     puts "create_geometry called"
+    @state = 2
   end
   
 #------------------
@@ -439,6 +604,37 @@ puts "Profile points = " + @points.inspect.to_s
  end
  
 #------------------
+# Set up some standard transformations for later use
+  def rotateX90(point)
+    # Rotation transformation about point, 90 degrees around X_AXIS direction
+    Geom::Transformation.rotation point, X_AXIS, 90.degrees
+  end
+
+  def rotateY90(point)
+    # Rotation transformation about point, 90 degrees around Y_AXIS direction
+    Geom::Transformation.rotation point, Y_AXIS, 90.degrees
+  end
+  
+  def rotateZ90(point)
+    # Rotation transformation about point, 90 degrees around Z_AXIS direction
+    Geom::Transformation.rotation point, Z_AXIS, 90.degrees
+  end
+
+  def rotateXminus90(point)
+    # Rotation transformation about point, 90 degrees around X_AXIS direction
+    Geom::Transformation.rotation point, X_AXIS, -90.degrees
+  end
+
+  def rotateYminus90(point)
+    # Rotation transformation about point, 90 degrees around Y_AXIS direction
+    Geom::Transformation.rotation point, Y_AXIS, -90.degrees
+  end
+  
+  def rotateZminus90(point)
+    # Rotation transformation about point, 90 degrees around Z_AXIS direction
+    Geom::Transformation.rotation point, Z_AXIS, -90.degrees
+  end
+  
 # Add a translation vector to a transformation
  	def translate( *args ) 
   # From Martin Rinehart 'Edges to Rubies' chapter 15
@@ -459,6 +655,7 @@ puts "Profile points = " + @points.inspect.to_s
 	end # of translate()
 
 end # class DrawFraming
+
 end # module JWM
 
 #------------------
