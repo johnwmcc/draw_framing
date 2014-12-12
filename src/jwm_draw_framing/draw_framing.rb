@@ -21,6 +21,15 @@
 
 #-----------------------------------------------------------------------------
 
+## To FIX before going further:
+## error when first pick is not on a face - one of the vectors and/or transforms is not initialised properly. FIXED
+## face angle is wrong if you pick on a back face - reverts to Z_AXIS. WRONG: it was seeing a transparent horizontal face in front
+## draw_geometry should 'pin' the drawn geometry at the first pick point, then use mouse move 
+##  to then orient cross section before create_geometry is called on second pick or (after dragging) 
+## onLButtonUp
+## On the second click or onMouseUp create_geometry is called, but doesn't do anything yet 
+##  and doesn't redraw the view.
+
 require "sketchup.rb"
 
 # Wrap everything in a module to create a unique namespace
@@ -29,7 +38,7 @@ module JWM
 class DrawFraming
 #------------------
   puts "****************************"
-  puts "draw_framing.rb v0.6.0.5 loaded"
+  puts "draw_framing.rb v0.6.0.7 loaded"
   
   # Set up class variables to hold details of standard sizes of timber
 		@@profile_name = "PAR" # Key to currently selected profile type such as PAR, architrave etc 
@@ -65,6 +74,7 @@ class DrawFraming
     @ip2 = nil
     @xdown = 0
     @ydown = 0
+    @vec5 = Geom::Vector3d.new 0,1,0 
     cursor = File.join(File.dirname(__FILE__), "framing_cursor.png")
     cursor_id = nil
     if cursor
@@ -143,7 +153,7 @@ class DrawFraming
 # puts "Mouse move called @state = " + @state.to_s
         # We are get ting the first end of the line.  Call the pick method
         # on the InputPoint to get a 3D position from the 2D screen position
-        # that is bassed as an argument to this method.
+        # that is passed as an argument to this method.
         @ip.pick view, x, y
         if( @ip != @ip1 )
             # if the point has changed from the last one we got, then
@@ -197,8 +207,9 @@ class DrawFraming
 				if( @ip1.valid? )
           # call the transformation method to get the component/group instance Transformation vector
           # from origin to first pick point
-          @tf = @ip1.transformation
-# puts "@tf = " + @tf.inspect.to_s
+          @first_pick = @ip1
+          @tf = @first_pick.transformation
+ # puts "@tf = " + @tf.inspect.to_s
           @state = 1
           txt = "Select plane of cross section using cursor (arrow) keys - red = Right, green = Left, blue = up or down "
           Sketchup::set_status_text(txt, SB_PROMPT)
@@ -208,10 +219,12 @@ class DrawFraming
           @tf4 = Geom::Transformation.new
           @tf5 = Geom::Transformation.new
           ## Detect if pick point is on a face, and if so, orient long axis normal to it
-          if @ip.face
+          if @ip.face 
             f = @ip.face
-            @@axis_lock= f.normal
-# puts  "Face picked: normal is " + f.normal.inspect.to_s
+# puts "@ip.face = " + @ip.face.inspect.to_s
+# puts  "Face picked: normal is \n"
+# puts f.normal.inspect
+           @@axis_lock= f.normal
 
             # Calculate vector which is the projection of the face normal onto the rg plane
             vec3 = Geom::Vector3d.new [f.normal.x, f.normal.y, 0]
@@ -226,12 +239,9 @@ class DrawFraming
             @tf3 = Geom::Transformation.rotation [0,0,0], Z_AXIS, rotate3
             
             # Calculate angle between face normal and the Z_AXIS
-            if f.normal.z >= 0.0 
-              rotate4 = f.normal.angle_between Z_AXIS
-            else
-              rotate4 = -(f.normal.angle_between Z_AXIS)
-            end
-  puts "rotate4 angle = " + rotate4.radians.to_s
+  puts "f.normal = " + f.normal.inspect.to_s            
+            rotate4 = f.normal.angle_between Z_AXIS
+  puts "rotate4 angle = " + rotate4.radians.to_s 
             
             # Calculate the vector corresponding to the rotation axis for the second transformation,
             # at rotate5 from the X_AXIS, which is at right angles to vec3 and in the rg plane
@@ -241,22 +251,24 @@ class DrawFraming
             # Calculate the rotation axis for the second transformation as the normal 
             #   to the Z_AXIS/face normal plane, which is the cross-product of the 
             #   face normal and the Z_AXIS vectors
-            if f.normal != Z_AXIS
+            if f.normal != Z_AXIS && f.normal != Z_AXIS.clone.reverse!
               @vec5 = Z_AXIS.cross f.normal
             else
-              @vec5 = Z_AXIS
+              @vec5 = Y_AXIS
             end # if f.normal
-            
-#  puts "@vec5 = " + @vec5.inspect.to_s
-
+   puts "@vec5 = " + @vec5.inspect.to_s
             @tf4 = Geom::Transformation.rotation [0,0,0], @vec5, rotate4
           else # no face at pick point
             # Default axis lock to Z_AXIS if no lock set
             if @@axis_lock == [0,0,0]
               @@axis_lock= Z_AXIS
-            # When no face picked define @vec5 to avoid n
-            @vec5 = Z_AXIS
-            end 
+              # When no face picked define @vec5 to avoid startup error
+              @vec5 = Y_AXIS
+
+            end
+
+
+
 
           end # if @ip.face
           # Combine the transformations @tf3 and @tf4 if they exist, otherwise leave @tf5 
@@ -292,7 +304,7 @@ class DrawFraming
     # If we are doing a drag, then create the cross-section on the mouse up event
 		if @state == 1
 			if( @dragging && @ip2.valid? )
-				self.create_geometry(@ip1.position, @ip2.position,view)
+				self.create_geometry(@first_pick.position, @ip2.position,view)
 				self.reset(view)
 			end
 		elsif @state == 2 ## waiting for third click to define length of timber to draw
@@ -399,7 +411,7 @@ class DrawFraming
         # view.line_stipple = @opts['stipple']
         view.set_color_from_line(@ip1, @ip2)
         # Draw feedback geometry to show where object to be created will be placed
-        self.draw_geometry(@ip1.position, @ip2.position, view)
+        self.draw_geometry(@first_pick.position, @ip2.position, view)
         @drawn = true
       end
 		end
