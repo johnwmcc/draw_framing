@@ -3,16 +3,28 @@ Change log
 
 Still to do/planned changes:
 When creating new framing component, check to see if same size one exists already and use same definition
-Tidy up Status Prompts and VCB messages and UserText input to make sense for frame drawing (they still mostly refer to CLineTool original)
-Keystrokes Tab and Shift+Tab to cycle forward/backward through timber sizes
+Tidy up Status Prompts and VCB messages and UserText input to make sense for frame drawing (a few still refer to CLineTool original)
+Keystrokes Tab and Shift+Tab to cycle forward/backward through timber orientation
 
+v6.0.9
+Orients cross-section according to mouse position (not very smoothly or reliably though), and draws geometry in the same place, then calls PushPull Tool to finish extrusion.
+
+Has non-aligned bounding box, with one corner at origin, however distant, for face and extruded timber - still to fix that either by creating cross-section geometry at origin first, and/or creating a ComponentDefinition instead of a Group/componentInstance, and  using place_component instead of drawing it at the @first_pick point
 
 Planned changes made:
 Keystrokes cursor/arrow keys Left, Right, Up, Down to toggle lock/unlock of drawing axis (but not orientation) DONE in v0.55
 Add ability to choose additional Custom sizes and Actual not nominal sizes - DONE in v0.54
 If possible, make it single undo to remove not only component drawn by PushPull but also original face and edges drawn at origin if operation cancelled before final PushPull DONE in v0.52
 
+## v0.6.0.7
+## error when first pick is not on a face - one of the vectors and/or transforms is not initialised properly. FIXED
+## face angle is wrong if you pick on a back face - reverts to Z_AXIS. WRONG: it was seeing a transparent horizontal face in front (the base of an inverted dome), and actually working correctly!
+## draw_geometry should 'pin' the drawn geometry at the first pick point, then use mouse move to then orient cross section before create_geometry is called on second pick or (after dragging) onLButtonUp
 
+## v0.6 to v0.6.0.6
+## Changed from defining cross section as only rectangular, to using an arbitrary string of points to define a profile. Set up transformations to rotate and orient draw_geometry polyline to align to face if first click is on a face, or a face in a component, or in the x-y plane if click is not on a face but empty space. Stepwise addition of functions to draw long axis of timber, and the normal to it about which rotation brings the drawn shape onto the plane of a picked face. Added cursor key sensing to toggle axis lock on X, Y, or A axes before drawing.
+
+## v0.6 Restarted from scratch with barest bones of line tool code.
 
 ## v0.58 started 2014-11-29 11:10 PM
 ## Began using GitHub for source control

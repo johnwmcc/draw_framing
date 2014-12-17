@@ -772,6 +772,7 @@ end
 		@plane = 'gb'
 		text = "\ngb plane"
 		n = 0 #normal is in r direction
+  end
 	if vec[b].abs > vec[g].abs # then swap width and depth dimensions
     n = 1
 	# cross_sect[1] = [[0,0,0],[0, d*gdir, 0], [0, d*gdir, w*bdir], [0, 0, w*bdir],[0,0,0]]

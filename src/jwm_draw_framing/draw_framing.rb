@@ -20,16 +20,6 @@
 # WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
 
 #-----------------------------------------------------------------------------
-
-## To FIX before going further:
-## error when first pick is not on a face - one of the vectors and/or transforms is not initialised properly. FIXED
-## face angle is wrong if you pick on a back face - reverts to Z_AXIS. WRONG: it was seeing a transparent horizontal face in front
-## draw_geometry should 'pin' the drawn geometry at the first pick point, then use mouse move 
-##  to then orient cross section before create_geometry is called on second pick or (after dragging) 
-## onLButtonUp
-## On the second click or onMouseUp create_geometry is called, but doesn't do anything yet 
-##  and doesn't redraw the view.
-
 require "sketchup.rb"
 
 # Wrap everything in a module to create a unique namespace
@@ -38,7 +28,7 @@ module JWM
 class DrawFraming
 #------------------
   puts "****************************"
-  puts "draw_framing.rb v0.6.0.7 loaded"
+  puts "draw_framing.rb v0.6.0.9 loaded"
   
   # Set up class variables to hold details of standard sizes of timber
 		@@profile_name = "PAR" # Key to currently selected profile type such as PAR, architrave etc 
@@ -48,15 +38,9 @@ class DrawFraming
   # Declare variables for later use
 		@@PushPullToolID = 21041
 		@@suspended = false
-    
-  # Establish array to store axis toggle state
-  # Axis_lock = one of the AXES if locked, or Vector3d(0,0,0) for not locked
-    @@axis_lock = Geom::Vector3d.new
-    # Default initially to (blue) z-axis for long dimension of timber
-    #   to avoid problems if first pick is not on a face and no axis 
-    #   has been specified by arrow key
-    
-    @@axis_lock = Z_AXIS
+    # used to denote that there is no axis-lock set
+    NO_LOCK = Geom::Vector3d.new 0,0,0 
+
 
   def initialize
     # Get model units (imperial or metric)
@@ -74,7 +58,7 @@ class DrawFraming
     @ip2 = nil
     @xdown = 0
     @ydown = 0
-    @vec5 = Geom::Vector3d.new 0,1,0 
+
     cursor = File.join(File.dirname(__FILE__), "framing_cursor.png")
     cursor_id = nil
     if cursor
@@ -85,9 +69,10 @@ class DrawFraming
     @n_size = []
     # Declare array to hold last defined custom size 
 		@@custom_size = ["Custom default",0.0.to_l,0.0.to_l]
+
     # Declare vector to become the direction of the long axis of timber to be placed
-    # @long_axis = Geom::Vector3d.new 0,0,0
-    
+    # defaults to Z_AXIS on initialization
+    @long_axis = Z_AXIS.clone #Geom::Vector3d.new 0,0,1 
 
   end # initialize
 
@@ -95,9 +80,23 @@ class DrawFraming
   def activate
     puts "activate called"
 
+    # Establish array to store axis toggle state
+    # Axis_lock = one of the AXES if locked, or Vector3d(0,0,0) for not locked
+    @@axis_lock = Geom::Vector3d.new
+    # Default initially to (blue) z-axis for long dimension of timber
+    #   to avoid problems if first pick is not on a face and no axis 
+    #   has been specified by arrow key
+    @@axis_lock = NO_LOCK
+
+    # Default axis of rotation when picking on blank screen 
+    #@vec5 = Geom::Vector3d.new 0,1,0    
+
+
+
 		# Set default timber size to 2" x 1" or 50 x 25mm (@chosen_size index = 1) if no size is set
 		if !@chosen_size 
-			@chosen_size = @@size_index # Size index was initialized to 1, or gets set later to be remembered here
+			# Size index was initialized to 1, or gets set later to be remembered here
+      @chosen_size = @@size_index 
 		end
     # Update remembered timber size			
 		@@size_index = @chosen_size 
@@ -113,6 +112,7 @@ class DrawFraming
 			end 
 		end
     # puts "Chosen_size index = " + @chosen_size.to_s  
+
     # The Sketchup::InputPoint class is used to get 3D points from screen positions
     # It uses the SketchUp inferencing code.
     # In this tool, we will have one insertion point and a second to determine orientation.
@@ -121,16 +121,17 @@ class DrawFraming
     @ip2        = Sketchup::InputPoint.new
     @drawn      = false
     @last_drawn = nil
-    Sketchup::set_status_text("Pick first corner for timber profile", SB_PROMPT)
+
+    Sketchup::set_status_text("Pick first corner for timber profile, and/or set a long axis direction using cursor key to toggle on/off: Right = red (X); Left = green (Y); Up or Down= blue (Z) direction", SB_PROMPT)
     # Get profile of default or last selected size
-    
     @profile = profile "PAR", @chosen_size # Select profile according to profile name and size
-# puts @profile[0,2].inspect
-    @cursor_text = "\n\n" + @profile[1] # Display chosen size at cursor
-    # Select profile array elements from 2 to last (-1), omitting 
-    #   profile name in profile[0] and size label in profile[1]
-    @points = @profile[2..-1]
-# puts "Profile points = " + @points.inspect.to_s 
+
+    # Declare arrays to hold timber profile points
+		@profile_points = []
+    @profile_points1 = []    
+
+    # Display chosen size at cursor
+    @cursor_text = "\n\n" + @profile[1] 
     self.reset(nil)
   end # activate
 
@@ -148,10 +149,10 @@ class DrawFraming
   
 #------------------
   def onMouseMove flags, x, y, view
-    case@state
-    when 0
+    case @state
+    when 0 # no mouse click yet made
 # puts "Mouse move called @state = " + @state.to_s
-        # We are get ting the first end of the line.  Call the pick method
+        # We are getting the first end of the line.  Call the pick method
         # on the InputPoint to get a 3D position from the 2D screen position
         # that is passed as an argument to this method.
         @ip.pick view, x, y
@@ -168,8 +169,10 @@ class DrawFraming
             # set the tooltip that should be displayed to this point
             view.tooltip = @ip1.tooltip
         end
-        when 1
-			# Getting the second pick point which defines the orientation of the timber cross-section
+    when 1 # After first click
+
+        
+			# Waiting for the second pick point which defines the orientation of the timber cross-section
 			# If you pass in another InputPoint on the pick method of InputPoint
 			# it uses that second point to do additional inferencing such as
 			# parallel to an axis.
@@ -189,6 +192,43 @@ class DrawFraming
 				@dragging = true
 			end
 			view.invalidate
+# puts "State = " + @state.to_s      
+      # Now orient the cross section according to the mouse position relative to pick point
+      # Get current mouse position on screen
+# puts "Screen coords = " + x.inspect.to_s + ", " +  y.inspect.to_s
+      #----------------------------------------------------
+      # Compare current mouse position with first pick point to determine which quadrant to draw cross section in (remember, screen coords have +y = downwards)
+      diff_x = x - view.screen_coords(@first_pick)[0]
+      diff_y = y - view.screen_coords(@first_pick )[1]
+
+#  puts "First pick point screen coords = " + (view.screen_coords(@first_pick)).inspect.to_s
+      # Set orientation horizontal (= not vertical)
+      @vert = false
+      if diff_x >= 0  && diff_y <= 0 # upper right quadrant
+        @quadrant = 0
+        if diff_y.abs > diff_x.abs
+          @vert = true
+        end
+        # no rotation needed
+      end
+      if diff_x < 0 && diff_y <= 0 # upper left quadrant
+        @quadrant = 1
+        if diff_y.abs > diff_x.abs
+          @vert = true
+        end
+      end
+      if diff_x < 0 && diff_y > 0# lower left quadrant
+        @quadrant = 2
+        if diff_y.abs > diff_x.abs
+          @vert = true
+        end
+      end
+      if diff_x >= 0 && diff_y > 0# lower right quadrant
+        @quadrant = 3
+        if diff_y.abs > diff_x.abs
+          @vert = true
+        end
+      end
 
       when 2
  # puts "Mouse move called @state = " + @state.to_s
@@ -202,93 +242,126 @@ class DrawFraming
 		# When the user clicks the first time (@state changes from 0 to 1), we switch to getting the
 		# second point.	When they click a second time we show the planned cross-section
 		case @state
-    when 0
+    when 0 # on first click
 			@ip1.pick view, x, y
 				if( @ip1.valid? )
+          #-------------------------
+          ## Calculate translation needed from world or component origin to first corner of profile
           # call the transformation method to get the component/group instance Transformation vector
           # from origin to first pick point
           @first_pick = @ip1
           @tf = @first_pick.transformation
- # puts "@tf = " + @tf.inspect.to_s
-          @state = 1
-          txt = "Select plane of cross section using cursor (arrow) keys - red = Right, green = Left, blue = up or down "
+ # puts "@tf = " + @tf.to_matrix
+
+
+          # Update status bar text
+          txt = "Pick or drag orientation of cross section, and/or choose long axis using cursor (arrow) keys - Right = red, Left = green, Up or Down = blue"
           Sketchup::set_status_text(txt, SB_PROMPT)
+
+          #------------------------------
           # Create new transformation objects (the identity transformation by default) for later use
-          # or recalculated below if a point on a face was picked 
           @tf3 = Geom::Transformation.new
           @tf4 = Geom::Transformation.new
           @tf5 = Geom::Transformation.new
+
+          #--------------------------------
+          # Get profile shape from @profile 
+          # Select profile array elements from 2 to last (-1), omitting 
+          #   profile name in profile[0] and size label in profile[1]
+          @profile_points0 = @profile[2..-1] 
+  # puts @profile[0,2].inspect
+          
+
+          #------------------------------
           ## Detect if pick point is on a face, and if so, orient long axis normal to it
+          #   unless axis is locked
           if @ip.face 
             f = @ip.face
 # puts "@ip.face = " + @ip.face.inspect.to_s
 # puts  "Face picked: normal is \n"
 # puts f.normal.inspect
-           @@axis_lock= f.normal
+            if @@axis_lock == NO_LOCK # axis not locked
+              @long_axis = f.normal
+            else
+              @long_axis = @@axis_lock
+            end
 
-            # Calculate vector which is the projection of the face normal onto the rg plane
-            vec3 = Geom::Vector3d.new [f.normal.x, f.normal.y, 0]
-            if f.normal.y < 0.0
+            #------------------------------
+            # Calculate vector which is the projection of the @long_axis onto the x-y (red-green) plane
+            vec3 = Geom::Vector3d.new @long_axis.x, @long_axis.y, 0
+            # Get angle between vec3 and X_AXIS, and calculate its sign
+            if @long_axis.y < 0.0
               rotate3 = -(X_AXIS.angle_between vec3)
             else
               rotate3 = X_AXIS.angle_between vec3 
-            end #f.normal.y
-  puts "rotate3 angle = " + rotate3.radians.to_s
+            end # if @long_axis.y
+#  puts "rotate3 angle = " + rotate3.radians.to_s
             
             # Set up transform to rotate the cross-section by this amount around Z_AXIS at world or component origin 
             @tf3 = Geom::Transformation.rotation [0,0,0], Z_AXIS, rotate3
-            
-            # Calculate angle between face normal and the Z_AXIS
-  puts "f.normal = " + f.normal.inspect.to_s            
-            rotate4 = f.normal.angle_between Z_AXIS
-  puts "rotate4 angle = " + rotate4.radians.to_s 
-            
-            # Calculate the vector corresponding to the rotation axis for the second transformation,
-            # at rotate5 from the X_AXIS, which is at right angles to vec3 and in the rg plane
-            # rotate5 = (rotate3 + 90.degrees)
-            # @vec5 = Geom::Vector3d.new Math.cos(rotate5), Math.sin(rotate5),0.0
-            
-            # Calculate the rotation axis for the second transformation as the normal 
-            #   to the Z_AXIS/face normal plane, which is the cross-product of the 
-            #   face normal and the Z_AXIS vectors
-            if f.normal != Z_AXIS && f.normal != Z_AXIS.clone.reverse!
-              @vec5 = Z_AXIS.cross f.normal
-            else
-              @vec5 = Y_AXIS
-            end # if f.normal
-   puts "@vec5 = " + @vec5.inspect.to_s
-            @tf4 = Geom::Transformation.rotation [0,0,0], @vec5, rotate4
+
+          #------------------------------
           else # no face at pick point
-            # Default axis lock to Z_AXIS if no lock set
-            if @@axis_lock == [0,0,0]
-              @@axis_lock= Z_AXIS
-              # When no face picked define @vec5 to avoid startup error
-              @vec5 = Y_AXIS
-
-            end
-
-
-
+            # When no face picked, default long axis to Z_AXIS if no axis lock set 
+            if @@axis_lock == NO_LOCK 
+              @long_axis = Z_AXIS
+            else
+              @long_axis = @@axis_lock
+            end #if @@axis_lock
 
           end # if @ip.face
+          
+          ## At this point, we should have the long axis set and the normal to it (vec5) set 
+          #   in the plane normal to the long axis
+          #------------------------------
+          # Calculate the rotation axis for the second transformation as the normal 
+          #   to the Z_AXIS/@long_axis plane, which is the cross-product of the 
+          #   @long_axis and the Z_AXIS vectors, unless @long_axis is Z_AXIS or its reverse
+          if @long_axis != Z_AXIS && @long_axis != Z_AXIS.clone.reverse!
+            @vec5 = Z_AXIS.cross @long_axis
+          else
+            @vec5 = Y_AXIS
+          end # if @long_axis
+#puts "@long_axis = " + @long_axis.inspect.to_s
+#puts "@vec5 = " + @vec5.inspect.to_s
+
+          #------------------------------
+          # Define third transform to finish rotating cross section into picked face plane, 
+          #   or normal to chosen axis lock
+          
+          # Calculate angle between @long_axis and the Z_AXIS
+#puts "@long_axis= " + @long_axis.inspect.to_s            
+          rotate4 = @long_axis.angle_between Z_AXIS
+#puts "rotate4 angle = " + rotate4.radians.to_s 
+          # Define 90 degree rotation about pick point around long axis vector
+          #  which will be needed if cross section needs to be rotated into desired orientation
+          @tf4 = Geom::Transformation.rotation [0,0,0], @vec5, rotate4            
+#puts "@first_pick.position = " + @first_pick.position.to_s
+          @rotate90_la = Geom::Transformation.rotation @first_pick.position, @long_axis, 90.degrees
+#  puts @rotate90_la.to_matrix 
+          
           # Combine the transformations @tf3 and @tf4 if they exist, otherwise leave @tf5 
           # as identity transform
           if @tf3 && @tf4
             @tf5 = @tf4 * @tf3
           end
-				else
+				else # in case mouse is being dragged
 					# txt << "on."
 					# txt << "TAB = stipple."
-					Sketchup::set_status_text(txt, SB_PROMPT)
+					# Sketchup::set_status_text(txt, SB_PROMPT)
 					@xdown = x
 					@ydown = y
         end #if @ip1.valid?
-		when 1
-		# create the cross-section on the second click
+        # Update state to show first click has been processed
+          @state = 1
+    when 1
+
+      # Create the cross-section on the second click
 			if( @ip2.valid? )
-				self.create_geometry(@ip1.position, @ip2.position, view)
+				self.create_geometry(@first_pick.position, @ip2.position, view)
 				self.reset(view)
-			end # if
+			end # if @ip2.valid
+    
     when 2
       puts "@state = 2"
     else
@@ -296,6 +369,7 @@ class DrawFraming
 		end #case
     # Clear any inference lock
     view.lock_inference
+    
   end # onLButtonDown
   
 #------------------
@@ -332,50 +406,68 @@ class DrawFraming
   # VK_xxx keys are built-in Sketchup Ruby constants defining (some) of the keys on the keyboard
 	
   def onKeyDown(key, repeat, flags, view)
-##    puts "onKeyDown called"
+# puts "onKeyDown called"
   # Check for Arrow keys to toggle axis lock
     case  key 
     when VK_RIGHT # Right arrow key pressed: toggle red axis lock on/off
       if @@axis_lock == X_AXIS then # Red axis lock was on: turn all axis locks off
-        @@axis_lock = Geom::Vector3d.new 0,0,0
+        @@axis_lock = NO_LOCK
         @cursor_text = "\n\n" + @profile[1]
       else
         @@axis_lock = X_AXIS # turn red axis lock on
+        # Reset long axis to axis lock and recalculate @vec5
+        @long_axis = @@axis_lock
+        @vec5 = Z_AXIS.cross @long_axis
         @cursor_text = "\n\n" + @profile[1] + "\nX locked"
       end
     when VK_LEFT # Left arrow key pressed: toggle green axis lock on/off
       if @@axis_lock == Y_AXIS then # Y-axis lock was on: turn all axis locks off
-        @@axis_lock = Geom::Vector3d.new 0,0,0
+        @@axis_lock = NO_LOCK
         @cursor_text = "\n\n" + @profile[1]
       else
-      
        @@axis_lock = Y_AXIS # turn green axis lock on
+       # Reset long axis to axis lock and recalculate @vec5
+       @long_axis = @@axis_lock
+       @vec5 = Z_AXIS.cross @long_axis
        @cursor_text = "\n\n" + @profile[1] + "\nY locked"
       end
-    when VK_UP # Up  arrow key pressed: toggle blue axis lock on/off
+      #view.refresh
+    when VK_DOWN # Up  arrow key pressed: toggle blue axis lock on/off
       if @@axis_lock == Z_AXIS then # Axis lock was on: turn all axis locks off
-        @@axis_lock = Geom::Vector3d.new 0,0,0
+        @@axis_lock = NO_LOCK
         @cursor_text = "\n\n" + @profile[1]
       else
         @@axis_lock = Z_AXIS # turn blue axis lock on
+        # Reset long axis to axis lock 
+        @long_axis = @@axis_lock
+        @vec5 = Y_AXIS
         @cursor_text = "\n\n" + @profile[1] + "\nZ locked"
       end
-    when VK_DOWN  # Down arrow key pressed: toggle blue axis lock on/off
+    when VK_UP  # Down arrow key pressed: toggle blue axis lock on/off
       if @@axis_lock == Z_AXIS then # Axis lock was on: turn all axis locks off
-        @@axis_lock = Geom::Vector3d.new 0,0,0
+        @@axis_lock = NO_LOCK
       else
         @@axis_lock = Z_AXIS # turn blue axis lock on
+        # Reset long axis to axis lock and recalculate @vec5
+        @long_axis = @@axis_lock
+        @vec5 = Y_AXIS
         @cursor_text = "\n\n" + @profile[1] + "\nZ locked"
       end
-    end
-#     puts"Selected axis = " + @@axis_lock.inspect.to_s
+    end # case key
 
+
+ #   puts"Selected axis = " + @@axis_lock.inspect.to_s
+    # force change of cursor on screen
+    self.onSetCursor() 
+    false
 
   end
    
 #------------------
   def onKeyUp key, repeat, flags, view
-    
+    #force redraw
+    view.invalidate
+    view.refresh    
   end
   
 #------------------
@@ -506,22 +598,50 @@ class DrawFraming
 	# Reset the tool back to its initial state
 	def reset(view)
     puts "reset called" 
-    @state = 0  
+    @state = 0 
+    # clear the InputPoints
+    @ip1.clear
+    @ip2.clear
+    @ip.clear
+
+    if( view )
+        view.tooltip = nil
+        view.invalidate if @drawn
+    end
+
+    @drawn = false
+    @dragging = false
   end
   
 #------------------
 ## Draw the geometry to show where the cross-section will be placed
 	def draw_geometry(pt1, pt2, view)
 #    puts "draw_geometry called"
-    # Draw timber profile (by default around the Z_AXIS in the rg plane)
-    # Relocate drawn cross section to pick point location
+    # Draw timber profile 
+    # This method has to take account of 
+    # - the shape of the timber cross-section defined in @profile array
+    # - whether to flip the cross-section L-R and/or top to bottom 
+    #     (to be set by the TAB key cycling through L-R = 1, T-B = 2, L-R and T-B = 3, or no flip = 0)
+    # - the position of the @first_pick (insertion) point relative to
+    #     world or component origin, which was defined by the transformation @tf
+    # - the direction of the @long_axis vector for the length of the inserted timber, which 
+    #     may be locked to a vector @@axis_lock set by a cursor arrow key 
+    #     to one of of the X, Y or Z axes, or picked normal to a face; or if no face is picked,
+    #     and no axis lock is set, to the Z axis by default
+    # - the current position of the mouse pointer screen coordinates relative to @first_pick 
+    #     screen position, defined by diff_x and diff_y, to calculate 
+    #   . which screen @quadrant (upper right, upper left, lower left or lower right)
+    #       the mouse is in (relative to @first_pick)and hence whether to draw cross-section rotated
+    #       by 0, 90, 180 or 270 degrees around the @long_axis vector
+    #   . whether diff_x or diff_y is larger, and hence whether to draw the profile with its 
+    #       longer cross-section @horiz(ontal) or @vert(ical)
 
+    # If any relevant key is pressed to change the axis lock or flip direction, before 
+    #   the mouse is released after dragging, or clicked a second time, 
+    #   the profile needs to be redrawn with the new value(s)
    
-    # Declare arrays to hold timber profile points
-		@profile_points = []
-    @profile_points1 = []
-    @profile_points0 = @profile[2..-1]
-# puts "Profile points = " + @profile_points.inspect.to_s
+
+# puts "Profile points0 = " + @profile_points0.inspect.to_s
     # Vector from component or world origin 
     origin = @tf.origin
 # puts "origin = " + origin.inspect.to_s
@@ -530,36 +650,47 @@ class DrawFraming
     # Calculate transformation from component or world origin to first pick point
     @tf2 = translate(@tf,vec) # Uses Martin Rinehart's translate function included below
 # puts "@tf2 = " + @tf2.inspect.to_s    
+
+    # If orientation (calculated from mouse position relative to first pick) is vertical: swap x and y coordinates of basic profile
+    if @vert 
+      @profile_points0 = swap_xy @profile_points0
+    end
+
     # Rotate about Z_AXIS at origin so as to be parallel in the x-y (rg) plane to the face normal.
     @profile_points0.each_index {|i| @profile_points1[i] = @profile_points0[i].transform(@tf3)} 
- 
+    
  # The profile needs to be revolved about the line 
     #  which is normal to the Z_AZIS AND to the face.normal if on a face, 
     #  unless the face.normal or @@axis_lock IS the Z_AXIS, in which case no revolution needed.
     # And to get the normal, we took the cross-product of 
     #  the Z_AZIS and the face.normal in onLButtonDown.
 
+
 		@profile_points1.each_index {|i| @profile_points[i] = @profile_points1[i].transform(@tf4)} 
 
     # Relocate profile to first pick point (transform @tf2) 
     @profile_points.each_index {|i| @profile_points[i] = @profile_points[i].transform(@tf2)}     
 
+    #See if mouse position requires profile to be reoriented
+    if @quadrant > 0
+      # Rotate by 90 degrees about @long_axis @quadrant times
+      i = 1
+      while i <= @quadrant do
+        @profile_points.each_index {|i| @profile_points[i].transform! @rotate90_la }
+        i += 1
+      end  
+    end # if @quadrant
 
 
- 
-#	puts "@profile_points[] = \n" + @profile_points.to_a.inspect
+ #   	puts "@profile_points[] = \n" + @profile_points.to_a.inspect
 
     
-    # Set direction of long axis of wood (normal to plane of cross-section)
-
-      @long_axis =  @@axis_lock
-      # newlen = @long_axis.length = 4.0
-# puts "Long axis = " + @long_axis.inspect.to_s  + " length = " + @long_axis.length  
+ 
       # Display long axis as visual feedback
       #@long_axis.transform!(@tf2)
       view.line_width = 2; view.line_stipple = ""
       view.set_color_from_line(pt1 - @long_axis, pt1 + @long_axis)
-      view.draw_line(pt1 - @long_axis, pt1 + @long_axis) # to show direction of long axis of wood  
+      view.draw_line(pt1, pt1 + @long_axis) # to show direction of long axis of wood  
       
 
       # end
@@ -571,19 +702,62 @@ class DrawFraming
       
       view.drawing_color = "magenta" 
       view.draw_polyline(@profile_points)
-end    
-
+end # draw_geometry
   
 #------------------
 ## Create geometry for the cross-section in the model
   def create_geometry(p1, p2, view)
-    puts "create_geometry called"
-    @state = 2
+#    puts "create_geometry called"
+ 		if @state < 2 #then we haven't yet created any geometry, so create the cross-section face
+			@model = Sketchup.active_model
+			# Watch for tool change - when PushPull tool called suspend DrawFraming, and resume when 
+			# PushPull tool finished
+#			@model.tools.add_observer(MyToolsObserver.new)
+			@model.start_operation("DrawFraming")
+  		@state = 2 # Waiting for pick or VCB entry to define length of component
+      @@df_tool_id = @model.tools.active_tool_id # Remember DrawFraming tool_id
+			
+      # Create an empty group to draw into
+			@grp = @model.active_entities.add_group()
+			@ents = @grp.entities
+
+      # Draw cross-section, name it, and make it into a component
+      
+			@face = @ents.add_face(@profile_points)
+
+			comp_name = UI.inputbox ["Component name"],["Frame element"],"Name this component instance" 
+			if comp_name # isn't nil (naming inputbox not cancelled)
+				@grp.description= comp_name[0].to_s 
+				@comp = @grp.to_component
+				@comp.definition().name = @n_size[@chosen_size][0] + " "  + comp_name[0].to_s
+
+        # Move face from origin to pick point
+#				@comp.transform!(@tf2 )
+
+				@last_drawn = [@comp]
+			 
+				@model.selection.clear
+				@model.selection.add @face
+				@face.reverse!
+
+				@model.commit_operation
+			else
+				# Clean up drawn face and edges, and reset view
+				 @ents.clear!
+				#@model.abort_operation # alternative way to cancel
+				view.refresh  
+				self.reset(view)
+				@state = 0
+			end # if comp_name
+				# Pushpull cross-section to length
+				self.suspend(view) # Suspend this tool, and select PushPullTool instead in suspend method 
+		end # if
   end
   
 #------------------
   def suspend(view)
     puts "suspend called"
+    Sketchup.send_action( 'selectPushPullTool:' )
   end
   
 #------------------
@@ -665,10 +839,35 @@ end
     return Geom::Transformation.new( arr )
     
 	end # of translate()
-
+  
+  def swap_xy(arry)
+   ## swap x and y coordinates in array 'arry'
+# puts "Array starts as = " + arry.inspect.to_s + " of length = " + arry.length.to_s
+    temp = arry.dup
+    i=0
+    arry.each_index { |i|
+      temp0 = arry[i][0]
+      temp1 = arry[i][1]
+      temp[i][0] = temp1
+      temp[i][1] = temp0}
+# puts "Returning temp = " + temp.inspect.to_s
+    return temp
+  end 
 end # class DrawFraming
 
 end # module JWM
+class Geom::Transformation
+  def to_matrix
+    a = self.to_a
+    f = "%8.3f"
+    l = [f, f, f, f].join("  ") + "\n"
+    str =  sprintf l,  a[0], a[1], a[2], a[3]
+    str += sprintf l,  a[4], a[5], a[6], a[7]
+    str += sprintf l,  a[8], a[9], a[10], a[11]
+    str += sprintf l,  a[12], a[13], a[14], a[15]
+    str 
+  end
+end
 
 #------------------
 # Load new drawing tool
