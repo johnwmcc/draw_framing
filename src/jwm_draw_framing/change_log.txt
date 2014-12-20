@@ -1,15 +1,31 @@
-#c:/r/draw_framing/draw_framing_main.rb
+#D:/Documents/GitHub/draw_framing/src/jwm_draw_framing/draw_framing.rb
 Change log
 
 Still to do/planned changes:
-When creating new framing component, check to see if same size one exists already and use same definition
-Tidy up Status Prompts and VCB messages and UserText input to make sense for frame drawing (a few still refer to CLineTool original)
-Keystrokes Tab and Shift+Tab to cycle forward/backward through timber orientation
+When creating new framing component, check to see if same size one exists already and use same definition.
 
-v6.0.9
+Fix non-aligned bounding box, with one corner at origin, however distant, for face and extruded timber - still to fix that either by creating cross-section geometry at origin first, and/or creating a ComponentDefinition instead of a Group/componentInstance, and  using place_component or move! or transform! instead of drawing it directly at the @first_pick point.
+
+Use variant of CLineTool to control a Ruby pushpull instead of invoking PushPull Tool. Should be fairly easy now I can see how to do it.
+
+Tidy up Status Prompts and VCB messages and UserText input to make sense for frame drawing (a few still refer to CLineTool original).
+
+Keystroke Tab to cycle forward through timber orientation (and maybe Shift+Tab to go backwards?) - to flip cross section left-right, top-bottom, or both, or back to original.
+
+When viewing 'up' the direction of @long_axis, re-orienting the cross-section goes in reverse to mouse rotation round pick point - to fix later.
+
+## v0.6.1.1
+Finally got orientation of cross section to work without jittering by changing tack in how to do it.
+Now use combination of mirror along X_AXIS and reducing @quadrant rotation count by one.
+
+## v0.6.1.0
+Made some mistake that crashed Sketchup without bug splat or Ruby error message.
+Reverted to v0.6.0.9 and started over on getting rotation and orientation to work without jitter.
+
+## v6.0.9
 Orients cross-section according to mouse position (not very smoothly or reliably though), and draws geometry in the same place, then calls PushPull Tool to finish extrusion.
 
-Has non-aligned bounding box, with one corner at origin, however distant, for face and extruded timber - still to fix that either by creating cross-section geometry at origin first, and/or creating a ComponentDefinition instead of a Group/componentInstance, and  using place_component instead of drawing it at the @first_pick point
+
 
 Planned changes made:
 Keystrokes cursor/arrow keys Left, Right, Up, Down to toggle lock/unlock of drawing axis (but not orientation) DONE in v0.55

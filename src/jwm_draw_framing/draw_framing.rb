@@ -28,7 +28,7 @@ module JWM
 class DrawFraming
 #------------------
   puts "****************************"
-  puts "draw_framing.rb v0.6.0.9 loaded"
+  puts "draw_framing.rb v0.6.1.1 loaded"
   
   # Set up class variables to hold details of standard sizes of timber
 		@@profile_name = "PAR" # Key to currently selected profile type such as PAR, architrave etc 
@@ -128,7 +128,7 @@ class DrawFraming
 
     # Declare arrays to hold timber profile points
 		@profile_points = []
-    @profile_points1 = []    
+    @profile_points1 = []
 
     # Display chosen size at cursor
     @cursor_text = "\n\n" + @profile[1] 
@@ -202,32 +202,48 @@ class DrawFraming
       diff_y = y - view.screen_coords(@first_pick )[1]
 
 #  puts "First pick point screen coords = " + (view.screen_coords(@first_pick)).inspect.to_s
-      # Set orientation horizontal (= not vertical)
-      @vert = false
+      
+      # See whether mouse position relative to @first_pick is nearer vertical than horizontal
+      # If so, orient profile accordingly
       if diff_x >= 0  && diff_y <= 0 # upper right quadrant
         @quadrant = 0
-        if diff_y.abs > diff_x.abs
-          @vert = true
+        if diff_y.abs > diff_x.abs # In this quadrant, this means use vertical profile
+          @swap_XY = true
+        else
+          @swap_XY = false
         end
-        # no rotation needed
+  # puts "Quadrant = " + @quadrant.to_s + " and @swap_XY = " + @swap_XY.to_s 
+  # puts "diff_x, diff_y  = " + diff_x.to_f.to_s + ", " + diff_y.to_f.to_s
       end
       if diff_x < 0 && diff_y <= 0 # upper left quadrant
         @quadrant = 1
         if diff_y.abs > diff_x.abs
-          @vert = true
+          @swap_XY = false # Profile rotated to this quadrant is vertical without swap
+        else
+          @swap_XY = true
         end
-      end
+  # puts "Quadrant = " + @quadrant.to_s + " and @swap_XY = " + @swap_XY.to_s
+  # puts "diff_x, diff_y  = " + diff_x.to_f.to_s + ", " + diff_y.to_f.to_s
+  end
       if diff_x < 0 && diff_y > 0# lower left quadrant
         @quadrant = 2
         if diff_y.abs > diff_x.abs
-          @vert = true
+          @swap_XY = true # In this quadrant, this means use vertical profile
+        else
+          @swap_XY = false
         end
+  # puts "diff_x, diff_y  = " + diff_x.to_f.to_s + ", " + diff_y.to_f.to_s
+  # puts "Quadrant = " + @quadrant.to_s + " and @swap_XY = " + @swap_XY.to_s
       end
       if diff_x >= 0 && diff_y > 0# lower right quadrant
         @quadrant = 3
         if diff_y.abs > diff_x.abs
-          @vert = true
+          @swap_XY = false
+        else
+          @swap_XY = true
         end
+  # puts "Quadrant = " + @quadrant.to_s + " and @swap_XY = " + @swap_XY.to_s
+  # puts "diff_x, diff_y  = " + diff_x.to_f.to_s + ", " + diff_y.to_f.to_s
       end
 
       when 2
@@ -237,7 +253,7 @@ class DrawFraming
   
 #------------------
   def onLButtonDown flags, x, y, view
-    puts "onLbuttonDown called"
+#puts "onLbuttonDown called"
 
 		# When the user clicks the first time (@state changes from 0 to 1), we switch to getting the
 		# second point.	When they click a second time we show the planned cross-section
@@ -251,7 +267,7 @@ class DrawFraming
           # from origin to first pick point
           @first_pick = @ip1
           @tf = @first_pick.transformation
- # puts "@tf = " + @tf.to_matrix
+# puts "@tf = " + @tf.to_matrix
 
 
           # Update status bar text
@@ -268,10 +284,14 @@ class DrawFraming
           # Get profile shape from @profile 
           # Select profile array elements from 2 to last (-1), omitting 
           #   profile name in profile[0] and size label in profile[1]
-          @profile_points0 = @profile[2..-1] 
-  # puts @profile[0,2].inspect
-          
-
+           @profile_dup = @profile[2..-1].clone 
+# puts @profile[0,2].inspect
+          # Original orientation is horizontal (vertical when rotated to second or fourth quadrant)
+          @profile_points_a = @profile_dup.clone # Get profile points from original (horizontal) profile
+ # puts "@profile_points_a = " + @profile_points_a.inspect.to_s
+          # When profile is opposite orientation, then swap x, y coords
+          # @profile_points_b = swap_xy @profile_dup.clone 
+ # puts "@profile_points_b = " + @profile_points_b.inspect.to_s
           #------------------------------
           ## Detect if pick point is on a face, and if so, orient long axis normal to it
           #   unless axis is locked
@@ -337,14 +357,17 @@ class DrawFraming
           #  which will be needed if cross section needs to be rotated into desired orientation
           @tf4 = Geom::Transformation.rotation [0,0,0], @vec5, rotate4            
 #puts "@first_pick.position = " + @first_pick.position.to_s
-          @rotate90_la = Geom::Transformation.rotation @first_pick.position, @long_axis, 90.degrees
+          @rotate90_la = Geom::Transformation.rotation [0,0,0], @long_axis, 90.degrees
 #  puts @rotate90_la.to_matrix 
+
+          # Calculate transform to mirror along Y-Z plane to swap orientation
+          @tf_swap = Geom::Transformation.scaling [0,0,0],-1,1,1
           
           # Combine the transformations @tf3 and @tf4 if they exist, otherwise leave @tf5 
           # as identity transform
-          if @tf3 && @tf4
-            @tf5 = @tf4 * @tf3
-          end
+          # if @tf3 && @tf4
+            # @tf5 = @tf4 * @tf3
+          # end
 				else # in case mouse is being dragged
 					# txt << "on."
 					# txt << "TAB = stipple."
@@ -366,7 +389,7 @@ class DrawFraming
       puts "@state = 2"
     else
       puts "@state not a valid value"
-		end #case
+		end #case @state
     # Clear any inference lock
     view.lock_inference
     
@@ -589,6 +612,7 @@ class DrawFraming
     else
       UI.messagebox "Sorry, that profile name isn't defined yet"
     end #case p_name
+
   end # profile
   
 #------------------
@@ -634,7 +658,7 @@ class DrawFraming
     #       the mouse is in (relative to @first_pick)and hence whether to draw cross-section rotated
     #       by 0, 90, 180 or 270 degrees around the @long_axis vector
     #   . whether diff_x or diff_y is larger, and hence whether to draw the profile with its 
-    #       longer cross-section @horiz(ontal) or @vert(ical)
+    #       longer cross-section horizontal or vertical
 
     # If any relevant key is pressed to change the axis lock or flip direction, before 
     #   the mouse is released after dragging, or clicked a second time, 
@@ -651,12 +675,23 @@ class DrawFraming
     @tf2 = translate(@tf,vec) # Uses Martin Rinehart's translate function included below
 # puts "@tf2 = " + @tf2.inspect.to_s    
 
-    # If orientation (calculated from mouse position relative to first pick) is vertical: swap x and y coordinates of basic profile
-    if @vert 
-      @profile_points0 = swap_xy @profile_points0
+    # If orientation (calculated from mouse position relative to first pick) is vertical 
+    #   where it would otherwise be drawn horizontal, and vice versa,
+    #   swap x and y coordinates of basic profile
+    if @swap_XY
+      @profile_points_a.each_index {|i| @profile_points0[i] = @profile_points_a.clone[i].transform(@tf_swap)} # mirror X-coords
+      # Reduce rotation by 90 degrees by reducing @quadrant
+      if @quadrant > 0
+        @quadrant -= 1 
+      else
+        @quadrant = 3
+      end # if @quadrant
+    else 
+      @profile_points0 = @profile_points_a.clone # original coordinates
     end
-
-    # Rotate about Z_AXIS at origin so as to be parallel in the x-y (rg) plane to the face normal.
+ puts @swap_XY
+ puts @profile_points0.inspect
+ # Rotate about Z_AXIS at origin so as to be parallel in the x-y (rg) plane to the face normal.
     @profile_points0.each_index {|i| @profile_points1[i] = @profile_points0[i].transform(@tf3)} 
     
  # The profile needs to be revolved about the line 
@@ -665,11 +700,7 @@ class DrawFraming
     # And to get the normal, we took the cross-product of 
     #  the Z_AZIS and the face.normal in onLButtonDown.
 
-
 		@profile_points1.each_index {|i| @profile_points[i] = @profile_points1[i].transform(@tf4)} 
-
-    # Relocate profile to first pick point (transform @tf2) 
-    @profile_points.each_index {|i| @profile_points[i] = @profile_points[i].transform(@tf2)}     
 
     #See if mouse position requires profile to be reoriented
     if @quadrant > 0
@@ -681,6 +712,8 @@ class DrawFraming
       end  
     end # if @quadrant
 
+    # Relocate profile to first pick point (transform @tf2) 
+    @profile_points.each_index {|i| @profile_points[i].transform!(@tf2)}   
 
  #   	puts "@profile_points[] = \n" + @profile_points.to_a.inspect
 
@@ -690,7 +723,7 @@ class DrawFraming
       #@long_axis.transform!(@tf2)
       view.line_width = 2; view.line_stipple = ""
       view.set_color_from_line(pt1 - @long_axis, pt1 + @long_axis)
-      view.draw_line(pt1, pt1 + @long_axis) # to show direction of long axis of wood  
+      view.draw_line(@first_pick.position, @first_pick.position + @long_axis) # to show direction of long axis of wood  
       
 
       # end
@@ -752,7 +785,7 @@ end # draw_geometry
 				# Pushpull cross-section to length
 				self.suspend(view) # Suspend this tool, and select PushPullTool instead in suspend method 
 		end # if
-  end
+  end # creat_geometry
   
 #------------------
   def suspend(view)
