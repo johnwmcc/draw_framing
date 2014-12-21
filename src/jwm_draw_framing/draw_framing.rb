@@ -28,7 +28,7 @@ module JWM
 class DrawFraming
 #------------------
   puts "****************************"
-  puts "draw_framing.rb v0.6.1.1 loaded"
+  puts "draw_framing.rb v0.6.1.2 loaded"
   
   # Set up class variables to hold details of standard sizes of timber
 		@@profile_name = "PAR" # Key to currently selected profile type such as PAR, architrave etc 
@@ -128,6 +128,7 @@ class DrawFraming
 
     # Declare arrays to hold timber profile points
 		@profile_points = []
+    @profile_points0 = []
     @profile_points1 = []
 
     # Display chosen size at cursor
@@ -212,9 +213,8 @@ class DrawFraming
         else
           @swap_XY = false
         end
-  # puts "Quadrant = " + @quadrant.to_s + " and @swap_XY = " + @swap_XY.to_s 
-  # puts "diff_x, diff_y  = " + diff_x.to_f.to_s + ", " + diff_y.to_f.to_s
       end
+
       if diff_x < 0 && diff_y <= 0 # upper left quadrant
         @quadrant = 1
         if diff_y.abs > diff_x.abs
@@ -222,9 +222,8 @@ class DrawFraming
         else
           @swap_XY = true
         end
-  # puts "Quadrant = " + @quadrant.to_s + " and @swap_XY = " + @swap_XY.to_s
-  # puts "diff_x, diff_y  = " + diff_x.to_f.to_s + ", " + diff_y.to_f.to_s
-  end
+      end
+
       if diff_x < 0 && diff_y > 0# lower left quadrant
         @quadrant = 2
         if diff_y.abs > diff_x.abs
@@ -232,9 +231,8 @@ class DrawFraming
         else
           @swap_XY = false
         end
-  # puts "diff_x, diff_y  = " + diff_x.to_f.to_s + ", " + diff_y.to_f.to_s
-  # puts "Quadrant = " + @quadrant.to_s + " and @swap_XY = " + @swap_XY.to_s
       end
+      
       if diff_x >= 0 && diff_y > 0# lower right quadrant
         @quadrant = 3
         if diff_y.abs > diff_x.abs
@@ -282,12 +280,10 @@ class DrawFraming
 
           #--------------------------------
           # Get profile shape from @profile 
-          # Select profile array elements from 2 to last (-1), omitting 
-          #   profile name in profile[0] and size label in profile[1]
-           @profile_dup = @profile[2..-1].clone 
-# puts @profile[0,2].inspect
+       
+       
           # Original orientation is horizontal (vertical when rotated to second or fourth quadrant)
-          @profile_points_a = @profile_dup.clone # Get profile points from original (horizontal) profile
+          @profile_points_a = @profile[2..-1] # Get profile points from original (horizontal) profile
  # puts "@profile_points_a = " + @profile_points_a.inspect.to_s
           # When profile is opposite orientation, then swap x, y coords
           # @profile_points_b = swap_xy @profile_dup.clone 
@@ -609,6 +605,9 @@ class DrawFraming
       # PAR is simply a rectangle with width and thickness, drawn in the x, y (red/green) plane
       # For testing, put in an angle
       profile = ["PAR", @n_size[p_size][0],[0,0,0],[0.5*width,0,0],[width,0.5*thickness,0],[width,thickness,0],[0,thickness,0],[0,0,0]]
+      # Make an array of just the profile points
+      @profile_points_a = profile[2..-1]
+      return profile
     else
       UI.messagebox "Sorry, that profile name isn't defined yet"
     end #case p_name
@@ -678,19 +677,15 @@ class DrawFraming
     # If orientation (calculated from mouse position relative to first pick) is vertical 
     #   where it would otherwise be drawn horizontal, and vice versa,
     #   swap x and y coordinates of basic profile
-    if @swap_XY
-      @profile_points_a.each_index {|i| @profile_points0[i] = @profile_points_a.clone[i].transform(@tf_swap)} # mirror X-coords
+  if @swap_XY
+      @profile_points_a.each_index {|i| @profile_points0[i] = @profile_points_a[i].transform(@tf_swap)} # mirror X-coords
       # Reduce rotation by 90 degrees by reducing @quadrant
-      if @quadrant > 0
-        @quadrant -= 1 
-      else
-        @quadrant = 3
-      end # if @quadrant
+      @quadrant = (@quadrant + 3)%4 # Take modulus 4 to 'wrap around' @quadrant 0
     else 
       @profile_points0 = @profile_points_a.clone # original coordinates
     end
- puts @swap_XY
- puts @profile_points0.inspect
+ # puts @swap_XY
+ # puts @profile_points0.inspect
  # Rotate about Z_AXIS at origin so as to be parallel in the x-y (rg) plane to the face normal.
     @profile_points0.each_index {|i| @profile_points1[i] = @profile_points0[i].transform(@tf3)} 
     

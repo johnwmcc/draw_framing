@@ -2,6 +2,8 @@
 Change log
 
 Still to do/planned changes:
+Separate out profile at origin (@profile_points) from final drawn profile (profile_points_final)  translated to pick point, so when creating profile, it can be drawn as a component at the origin, then translated to pick point and will have aligned axes.
+
 When creating new framing component, check to see if same size one exists already and use same definition.
 
 Fix non-aligned bounding box, with one corner at origin, however distant, for face and extruded timber - still to fix that either by creating cross-section geometry at origin first, and/or creating a ComponentDefinition instead of a Group/componentInstance, and  using place_component or move! or transform! instead of drawing it directly at the @first_pick point.
@@ -13,6 +15,13 @@ Tidy up Status Prompts and VCB messages and UserText input to make sense for fra
 Keystroke Tab to cycle forward through timber orientation (and maybe Shift+Tab to go backwards?) - to flip cross section left-right, top-bottom, or both, or back to original.
 
 When viewing 'up' the direction of @long_axis, re-orienting the cross-section goes in reverse to mouse rotation round pick point - to fix later.
+
+## v0.6.1.2
+Changed code to back off @quadrant from if..else..end to use modulus 4.
+
+Fixed uninitialized @profile_points0 - now defined as empty array in activate.
+
+Removed unnecessary clone (copy) actions.
 
 ## v0.6.1.1
 Finally got orientation of cross section to work without jittering by changing tack in how to do it.
