@@ -6,13 +6,16 @@ Separate out profile at origin (@profile_points) from final drawn profile (profi
 
 When creating new framing component, check to see if same size one exists already and use same definition.
 
-Use variant of CLineTool to control a Ruby pushpull instead of invoking PushPull Tool. Should be fairly easy now I can see how to do it.
+Use variant of CLineTool to control a Ruby pushpull instead of invoking PushPull Tool. Should be fairly easy now I can see how to do it. [Done, without the full visual feedback though]
 
 Tidy up Status Prompts and VCB messages and UserText input to make sense for frame drawing (a few still refer to CLineTool original).
 
 Keystroke Tab to cycle forward through timber orientation (and maybe Shift+Tab to go backwards?) - to flip cross section left-right, top-bottom, or both, or back to original.
 
 When viewing 'up' the direction of @long_axis, re-orienting the cross-section goes in reverse to mouse rotation round pick point - to fix later.
+## v0.6.3.0
+Fixed misalignment (rotated orientation) of created component, which now is created where drawn
+
 ## v0.6.2.1
 Fixed non-aligned bounding box. Now create cross-section geometry at origin first, as a ComponentDefinition instead of a Group/ComponentInstance. Then insert an instance of the definition at the origin, and transform it into correct orientation and position, instead of drawing it directly at the @first_pick point.
 
