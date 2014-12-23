@@ -1,4 +1,4 @@
-﻿## Draw Framing v0.6 rewrite from scratch
+﻿ ## Draw Framing v0.6 rewrite from scratch
 ## D:\Documents\GitHub\draw_framing\src\draw_framing\draw_framing.rb
 ## load "jwm_draw_framing/draw_framing.rb"
 ## Name: Draw Framing Tool
@@ -28,7 +28,7 @@ module JWM
 class DrawFraming
 #------------------
   puts "****************************"
-  puts "draw_framing.rb v0.6.1.2 loaded"
+  puts "draw_framing.rb v0.6.2.1 loaded"
   
   # Set up class variables to hold details of standard sizes of timber
 		@@profile_name = "PAR" # Key to currently selected profile type such as PAR, architrave etc 
@@ -73,7 +73,7 @@ class DrawFraming
     # Declare vector to become the direction of the long axis of timber to be placed
     # defaults to Z_AXIS on initialization
     @long_axis = Z_AXIS.clone #Geom::Vector3d.new 0,0,1 
-
+    @frame_length = 1.0
   end # initialize
 
 #------------------
@@ -119,8 +119,10 @@ class DrawFraming
     @ip         = Sketchup::InputPoint.new
     @ip1        = Sketchup::InputPoint.new
     @ip2        = Sketchup::InputPoint.new
+    @ip3        = Sketchup::InputPoint.new
     @drawn      = false
     @last_drawn = nil
+    @flip       = 0 # flip state - cycles through 0-3 to flipX, flipY, flipXY, or noflip
 
     Sketchup::set_status_text("Pick first corner for timber profile, and/or set a long axis direction using cursor key to toggle on/off: Right = red (X); Left = green (Y); Up or Down= blue (Z) direction", SB_PROMPT)
     # Get profile of default or last selected size
@@ -150,7 +152,7 @@ class DrawFraming
   
 #------------------
   def onMouseMove flags, x, y, view
-    case @state
+    case @state # Check what state the tool is in
     when 0 # no mouse click yet made
 # puts "Mouse move called @state = " + @state.to_s
         # We are getting the first end of the line.  Call the pick method
@@ -240,19 +242,47 @@ class DrawFraming
         else
           @swap_XY = true
         end
-  # puts "Quadrant = " + @quadrant.to_s + " and @swap_XY = " + @swap_XY.to_s
-  # puts "diff_x, diff_y  = " + diff_x.to_f.to_s + ", " + diff_y.to_f.to_s
-      end
 
-      when 2
- # puts "Mouse move called @state = " + @state.to_s
+# puts "diff_x, diff_y  = " + diff_x.to_f.to_s + ", " + diff_y.to_f.to_s
+      end
+# puts "Quadrant = " + @quadrant.to_s + " and @swap_XY = " + @swap_XY.to_s
+
+# --------------------------------------------------------------------------
+      when 2 #  after second click - waiting for PushPull operation
+# puts "Mouse move called @state = " + @state.to_s
+        # Getting the second end of the line
+        # If you pass in another InputPoint on the pick method of InputPoint
+        # it uses that second point to do additional inferencing such as
+        # parallel to an axis.
+        @ip3.pick view, x, y, @first_pick
+        view.tooltip = @ip3.tooltip if( @ip3.valid? )
+
+        # Update the length displayed in the VCB
+        if( @ip3.valid? )
+          # Calculate length along axis
+          how_long = @first_pick.position.distance @ip3.position
+          vec = @first_pick.position.vector_to @ip3.position
+          angl = vec.angle_between  @long_axis
+          @frame_length = Math.cos(angl) * how_long
+# puts "Frame length = " + @frame_length.to_s
+          Sketchup::set_status_text "Length" , SB_VCB_LABEL
+          Sketchup::set_status_text @frame_length.to_s, SB_VCB_VALUE
+        end
+        # @face.pushpull length
+        # Check to see if the mouse was moved far enough to create a line.
+        # This is used so that you can create a line by either draggin
+        # or doing click-move-click
+        if( (x-@xdown).abs > 10 || (y-@ydown).abs > 10 )
+          @dragging = true
+        end
+        view.invalidate        
     end
   end # onMouseMove
   
 #------------------
   def onLButtonDown flags, x, y, view
 #puts "onLbuttonDown called"
-
+#puts "@state = " + @state.to_s
 		# When the user clicks the first time (@state changes from 0 to 1), we switch to getting the
 		# second point.	When they click a second time we show the planned cross-section
 		case @state
@@ -266,7 +296,8 @@ class DrawFraming
           @first_pick = @ip1
           @tf = @first_pick.transformation
 # puts "@tf = " + @tf.to_matrix
-
+          # Update state to show first click has been processed
+          @state = 1
 
           # Update status bar text
           txt = "Pick or drag orientation of cross section, and/or choose long axis using cursor (arrow) keys - Right = red, Left = green, Up or Down = blue"
@@ -274,9 +305,11 @@ class DrawFraming
 
           #------------------------------
           # Create new transformation objects (the identity transformation by default) for later use
+          @tf_identity = Geom::Transformation.new # Identity transform to insert component at origin
           @tf3 = Geom::Transformation.new
           @tf4 = Geom::Transformation.new
           @tf5 = Geom::Transformation.new
+          @tf6 = Geom::Transformation.new
 
           #--------------------------------
           # Get profile shape from @profile 
@@ -371,18 +404,22 @@ class DrawFraming
 					@xdown = x
 					@ydown = y
         end #if @ip1.valid?
-        # Update state to show first click has been processed
-          @state = 1
+
     when 1
 
       # Create the cross-section on the second click
 			if( @ip2.valid? )
 				self.create_geometry(@first_pick.position, @ip2.position, view)
-				self.reset(view)
+				# self.reset(view)
+        @state = 2 
 			end # if @ip2.valid
-    
-    when 2
-      puts "@state = 2"
+      txt = "Press TAB key to flip cross-section along X, Y, both, or neither direction"
+      Sketchup::set_status_text(txt, SB_PROMPT)
+    when 2 # Fix the length of the component on third click or onLButtonUp
+      @state = 3
+      # puts "onLButtonDown " + @state.to_s
+      # puts "@frame_length = " + @frame_length.to_s
+      self.create_geometry(@first_pick.position,@ip3.position, view)
     else
       puts "@state not a valid value"
 		end #case @state
@@ -398,8 +435,10 @@ class DrawFraming
 		if @state == 1
 			if( @dragging && @ip2.valid? )
 				self.create_geometry(@first_pick.position, @ip2.position,view)
-				self.reset(view)
+				#self.reset(view)
 			end
+      txt = "Press TAB key to flip cross-section along X, Y, both, or neither direction"
+      Sketchup::set_status_text(txt, SB_PROMPT)
 		elsif @state == 2 ## waiting for third click to define length of timber to draw
 
 		end
@@ -427,7 +466,7 @@ class DrawFraming
   def onKeyDown(key, repeat, flags, view)
 # puts "onKeyDown called"
   # Check for Arrow keys to toggle axis lock
-    case  key 
+    case key 
     when VK_RIGHT # Right arrow key pressed: toggle red axis lock on/off
       if @@axis_lock == X_AXIS then # Red axis lock was on: turn all axis locks off
         @@axis_lock = NO_LOCK
@@ -472,8 +511,48 @@ class DrawFraming
         @vec5 = Y_AXIS
         @cursor_text = "\n\n" + @profile[1] + "\nZ locked"
       end
-    end # case key
+    when CONSTRAIN_MODIFIER_KEY
+      if( repeat == 1 )
+      @shift_down_time = Time.now
+# puts "CONSTRAINED"
+        # if we already have an inference lock, then unlock it
+        if( view.inference_locked? )
+          # calling lock_inference with no arguments actually unlocks
+          view.lock_inference
+        elsif( @state == 0 && @ip1.valid? )
+          view.lock_inference @ip1
+          view.line_width = 3
+        elsif( @state <= 2 && @ip2.valid? )
+          view.lock_inference @ip2, @ip1
+          view.line_width = 3
+        end
+      end
+    when 9 # Tab key: Cycle through flipX, flipY, flipXY, noflip
+#puts "@state = " + @state.to_s
+    if @state == 1   # Only applicable when cross-section has been drawn
+        @flip = (@flip + 1)%4 
 
+#puts "flip state = " + @flip.to_s
+      # Reorient inserted profile
+      # If needed, flip profile in x, y, or both directions
+      bb_centre = @face.bounds.center
+      flip_x = Geom::Transformation.scaling bb_centre, -1.0,1.0,1.0
+      flip_y = Geom::Transformation.scaling bb_centre, 1.0,-1.0,1.0
+      #if @comp_defn.instances[-1] # don't try unless there's something created 
+          case @flip 
+          when 0 # flip X
+            @comp_defn.instances[-1].transform! flip_x
+          when 1 # flip Y
+            @comp_defn.instances[-1].transform! flip_y
+          when 2 # flip X & Y
+            @comp_defn.instances[-1].transform! flip_x
+            @comp_defn.instances[-1].transform! flip_y
+          when 3 # flip back to original
+            @comp_defn.instances[-1].transform! flip_y
+          end # case @flip
+        end # if@comp_defn.instances[-1]
+#      end # if @state
+    end # case key
 
  #   puts"Selected axis = " + @@axis_lock.inspect.to_s
     # force change of cursor on screen
@@ -490,10 +569,59 @@ class DrawFraming
   end
   
 #------------------
-  def onUserText text, view
-    puts "onUserText called"
-  end
-  
+  def onUserText(text, view)
+    # We only accept input when the state is 2 (i.e. select the third point to fix length)
+    #return if not @state == 1
+    #return if not @ip2.valid?
+    #p @ip2.valid?
+# puts "onUserText called"
+    # The user may type in something that we can't parse as a length
+    # so we set up some exception handling to trap that
+    begin
+      value = text.to_l
+    rescue
+      # Error parsing the text
+      UI.beep
+      UI.messagebox "Cannot convert " + #{text} + " to a Length"
+      value = nil
+      Sketchup::set_status_text "", SB_VCB_VALUE
+    end
+    return if !value
+
+    if @state == 2 and @ip3.valid?
+      # Compute the direction and the second point
+      pt1 = @ip1.position
+      vec = @ip3.position - pt1
+      if( vec.length == 0.0 )
+          UI.beep
+          return
+      end
+      vec.length = value
+      pt2 = pt1 + vec
+
+      # Create the frame element
+      # Return length and set value
+      @frame_length = value
+      # Finish drawing the geometry
+      flags = nil
+      x = nil
+      y = nil
+      view = @model.active_view
+      self.onLButtonDown(flags, x, y, view)
+    end
+    ## Note by JWM - not sure what this bit does. Leave for the moment but comment out
+    # if @last_drawn and @state == 0
+      # pt1 = @last_drawn[0].start
+      # vec = @last_drawn[0].end - @last_drawn[0].start
+      # vec.length = value
+      # pt2 = pt1 + vec
+      # view.model.active_entities.erase_entities @last_drawn
+      ##@last_drawn = nil
+      # self.create_geometry(pt1, pt2, view)
+      # self.reset view
+    # end
+  end #onUserText
+
 #------------------
   def draw view
 # puts "draw called"
@@ -535,7 +663,7 @@ class DrawFraming
 #------------------
 	# onCancel  is called when the user hits the escape key
 	def onCancel flag, view
-      puts "onCancel called"
+    #  puts "onCancel called"
 		self.reset(view)
 	end
 
@@ -629,7 +757,7 @@ class DrawFraming
 
     if( view )
         view.tooltip = nil
-        view.invalidate if @drawn
+        view.refresh if @drawn
     end
 
     @drawn = false
@@ -662,34 +790,63 @@ class DrawFraming
     # If any relevant key is pressed to change the axis lock or flip direction, before 
     #   the mouse is released after dragging, or clicked a second time, 
     #   the profile needs to be redrawn with the new value(s)
-   
+
+    case @state
+    when 1 # After first click, waiting for second click or onLButtonUp
 
 # puts "Profile points0 = " + @profile_points0.inspect.to_s
     # Vector from component or world origin 
-    origin = @tf.origin
+      origin = @tf.origin
 # puts "origin = " + origin.inspect.to_s
-    vec = origin.vector_to(pt1) # Vector from there to pick point
+      vec = origin.vector_to(pt1) # Vector from there to pick point
 # puts "vec = " + vec.inspect.to_s
-    # Calculate transformation from component or world origin to first pick point
-    @tf2 = translate(@tf,vec) # Uses Martin Rinehart's translate function included below
+      # Calculate transformation from component or world origin to first pick point
+      @tf2 = translate(@tf,vec) # Uses Martin Rinehart's translate function included below
 # puts "@tf2 = " + @tf2.inspect.to_s    
 
-    # If orientation (calculated from mouse position relative to first pick) is vertical 
-    #   where it would otherwise be drawn horizontal, and vice versa,
-    #   swap x and y coordinates of basic profile
-  if @swap_XY
-      @profile_points_a.each_index {|i| @profile_points0[i] = @profile_points_a[i].transform(@tf_swap)} # mirror X-coords
-      # Reduce rotation by 90 degrees by reducing @quadrant
-      @quadrant = (@quadrant + 3)%4 # Take modulus 4 to 'wrap around' @quadrant 0
-    else 
-      @profile_points0 = @profile_points_a.clone # original coordinates
-    end
+        # If orientation (calculated from mouse position relative to first pick) is vertical 
+        #   where it would otherwise be drawn horizontal, and vice versa,
+        #   swap x and y coordinates of basic profile
+      if @swap_XY
+          @profile_points_a.each_index {|i| @profile_points0[i] = @profile_points_a[i].transform(@tf_swap)} # mirror X-coords
+          # Reduce rotation by 90 degrees by reducing @quadrant
+          @quad = (@quadrant + 3)%4 # Take modulus 4 to 'wrap around' @quadrant 0
+      else 
+          @profile_points0 = @profile_points_a.clone # original coordinates
+          @quad = @quadrant
+      end
  # puts @swap_XY
  # puts @profile_points0.inspect
- # Rotate about Z_AXIS at origin so as to be parallel in the x-y (rg) plane to the face normal.
+      # Reorient inserted profile
+      # If needed, flip profile in x, y, or both directions
+      # profile_center = Geom::Point3d.linear_combination 0.5,@profile_points0.min, 0.5, @profile_points0.max
+# puts "BB center = " + profile_center.inspect
+   
+      # flip_x = Geom::Transformation.scaling profile_center, -1.0,1.0,1.0
+      # flip_y = Geom::Transformation.scaling profile_center, 1.0,-1.0,1.0
+      # temp = []
+      # temp = @profile_points.clone
+#puts temp.inspect
+      # case @flip 
+      # when 0
+      #  do nothing
+      # when 1 # flip X
+        # @profile_points0.each_index{|i| @profile_points0 = temp[i].transform flip_x}
+#puts "@flip = " + @flip.to_s
+      # when 2 # flip Y
+        # @profile_points0.each_index{|i| @profile_points0 = temp[i].transform flip_y}
+#puts "@flip = " + @flip.to_s
+      # when 3 # flip X & Y
+        # @profile_points0.each_index{|i| @profile_points0 = temp[i].transform flip_x}
+        # @profile_points0.each_index{|i| @profile_points0 = temp[i].transform flip_y}
+
+#puts "@flip = " + @flip.to_s
+      # end # case @flip
+ 
+    # Rotate about Z_AXIS at origin so as to be parallel in the x-y (rg) plane to the face normal.
     @profile_points0.each_index {|i| @profile_points1[i] = @profile_points0[i].transform(@tf3)} 
     
- # The profile needs to be revolved about the line 
+    # The profile needs to be revolved about the line 
     #  which is normal to the Z_AZIS AND to the face.normal if on a face, 
     #  unless the face.normal or @@axis_lock IS the Z_AXIS, in which case no revolution needed.
     # And to get the normal, we took the cross-product of 
@@ -698,14 +855,20 @@ class DrawFraming
 		@profile_points1.each_index {|i| @profile_points[i] = @profile_points1[i].transform(@tf4)} 
 
     #See if mouse position requires profile to be reoriented
-    if @quadrant > 0
-      # Rotate by 90 degrees about @long_axis @quadrant times
-      i = 1
-      while i <= @quadrant do
+    i = 1
+    if @swap_XY
+      # Rotate by 90 degrees about @long_axis @quad times
+      
+      while i <= (@quad )%4 do
         @profile_points.each_index {|i| @profile_points[i].transform! @rotate90_la }
         i += 1
       end  
-    end # if @quadrant
+    else 
+      while i <= @quad do
+        @profile_points.each_index {|i| @profile_points[i].transform! @rotate90_la }
+        i += 1
+      end  
+    end # if @swap_XY
 
     # Relocate profile to first pick point (transform @tf2) 
     @profile_points.each_index {|i| @profile_points[i].transform!(@tf2)}   
@@ -730,62 +893,97 @@ class DrawFraming
       
       view.drawing_color = "magenta" 
       view.draw_polyline(@profile_points)
+# -------------------------------------------------------------------------------
+    when 2 # Cross-section drawn, waiting for drag or click to pushpull to length
+      # @frame_length was defined in onMouseMove @state == 2
+      # Define translation to move profile outline along @long_axis by @frame_length
+      # @tf6 = translate(@first_pick.position, @first_pick.position.offset(@long_axis, @frame_length))
+      # @vec6 = @first_pick.position.vector_to @first_pick.position.offset(@long_axis, @frame_length)
+     # Flip X, Y, both or neither to orient face
+ 
+# puts "flip state = " + @flip.to_s
+     
+      view.drawing_color = "magenta" 
+      view.draw_polyline(@profile_points)
+      view.draw_line @first_pick.position, @first_pick.position.offset(@long_axis, @frame_length)
+    end # case @state
 end # draw_geometry
   
-#------------------
+# ====================================================
 ## Create geometry for the cross-section in the model
   def create_geometry(p1, p2, view)
 #    puts "create_geometry called"
  		if @state < 2 #then we haven't yet created any geometry, so create the cross-section face
 			@model = Sketchup.active_model
-			# Watch for tool change - when PushPull tool called suspend DrawFraming, and resume when 
-			# PushPull tool finished
-#			@model.tools.add_observer(MyToolsObserver.new)
 			@model.start_operation("DrawFraming")
   		@state = 2 # Waiting for pick or VCB entry to define length of component
-      @@df_tool_id = @model.tools.active_tool_id # Remember DrawFraming tool_id
-			
-      # Create an empty group to draw into
-			@grp = @model.active_entities.add_group()
-			@ents = @grp.entities
-
-      # Draw cross-section, name it, and make it into a component
       
-			@face = @ents.add_face(@profile_points)
+      @@df_tool_id = @model.tools.active_tool_id # Remember DrawFraming tool_id
+      # Create an empty component definition
+      @ents = @model.definitions
+      @comp_defn = @ents.add("comp")
 
-			comp_name = UI.inputbox ["Component name"],["Frame element"],"Name this component instance" 
-			if comp_name # isn't nil (naming inputbox not cancelled)
-				@grp.description= comp_name[0].to_s 
-				@comp = @grp.to_component
-				@comp.definition().name = @n_size[@chosen_size][0] + " "  + comp_name[0].to_s
+      # Create an empty group to draw into
+			# @grp = @model.active_entities.add_group()
+			# @ents = @grp.entities
 
-        # Move face from origin to pick point
-#				@comp.transform!(@tf2 )
+      # Define cross-section and name it
 
-				@last_drawn = [@comp]
-			 
+			comp_defn_name = UI.inputbox ["Component name "],["Frame element"],"Name this component " 
+			if comp_defn_name # isn't nil (naming inputbox not cancelled)
+        @comp_defn.name = @n_size[@chosen_size][0] + " " + comp_defn_name[0].to_s
+				@comp_defn.description = @n_size[@chosen_size][0] + " "  +comp_defn_name[0].to_s
+        
+        # Insert face into new component definition
+        ents = @comp_defn.entities
+# puts "@comp_defn class = " + @comp_defn.class.to_s   
+
+        @face = ents.add_face(@profile_points0)
+        @face.reverse!
+        # Insert an instance of the component at the origin
+        @model.active_entities.add_instance(@comp_defn, @tf_identity)
+#puts "@face.vertices = " + @face.vertices.inspect.to_s
+
+				@last_drawn = [@comp_defn]
+        # Orient face normal to @long_axis and correctly oriented
+				@comp_defn.instances[-1].transform!(@tf3)
+        @comp_defn.instances[-1].transform!(@tf4)
+				@comp_defn.instances[-1].transform!(@tf6)
+        
+        # Move inserted component face from origin to pick point
+				@comp_defn.instances[-1].transform!(@tf2)			 
 				@model.selection.clear
-				@model.selection.add @face
+				@model.selection.add @face 
 				@face.reverse!
-
-				@model.commit_operation
+      # Operation cancelled 
 			else
-				# Clean up drawn face and edges, and reset view
-				 @ents.clear!
-				#@model.abort_operation # alternative way to cancel
+				@model.abort_operation # alternative way to cancel
 				view.refresh  
 				self.reset(view)
-				@state = 0
+
 			end # if comp_name
-				# Pushpull cross-section to length
-				self.suspend(view) # Suspend this tool, and select PushPullTool instead in suspend method 
-		end # if
-  end # creat_geometry
+		end # if @state < 2    
+# ------------------------
+      if @state == 3 
+      # Pushpull cross-section to length
+#puts "create_geometry called state 3"
+        if @face.normal == @long_axis
+          @face.pushpull @frame_length 
+        else # reverse direction to pushpull
+          @face.pushpull -@frame_length
+        end
+#puts "@comp_defn.instances[-1] = " + @comp_defn.instances[0].to_s
+        @comp_defn.name = @profile[0] + " " + @n_size[@chosen_size][0] + " x " + @frame_length.to_l.to_s
+        self.reset(view)
+        @model.commit_operation
+      end # if @state == 3
+
+  end # create_geometry
   
 #------------------
   def suspend(view)
     puts "suspend called"
-    Sketchup.send_action( 'selectPushPullTool:' )
+    # Sketchup.send_action( 'selectPushPullTool:' )
   end
   
 #------------------
@@ -867,7 +1065,7 @@ end # draw_geometry
     return Geom::Transformation.new( arr )
     
 	end # of translate()
-  
+
   def swap_xy(arry)
    ## swap x and y coordinates in array 'arry'
 # puts "Array starts as = " + arry.inspect.to_s + " of length = " + arry.length.to_s

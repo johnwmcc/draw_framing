@@ -2,11 +2,9 @@
 Change log
 
 Still to do/planned changes:
-Separate out profile at origin (@profile_points) from final drawn profile (profile_points_final)  translated to pick point, so when creating profile, it can be drawn as a component at the origin, then translated to pick point and will have aligned axes.
+Separate out profile at origin (@profile_points) from final drawn profile (profile_points_final)  translated to pick point, so when creating profile, it can be drawn as a component at the origin, then translated to pick point and will have aligned axes. [Mostly done, but not quite right yet for swapped rotation]
 
 When creating new framing component, check to see if same size one exists already and use same definition.
-
-Fix non-aligned bounding box, with one corner at origin, however distant, for face and extruded timber - still to fix that either by creating cross-section geometry at origin first, and/or creating a ComponentDefinition instead of a Group/componentInstance, and  using place_component or move! or transform! instead of drawing it directly at the @first_pick point.
 
 Use variant of CLineTool to control a Ruby pushpull instead of invoking PushPull Tool. Should be fairly easy now I can see how to do it.
 
@@ -15,6 +13,19 @@ Tidy up Status Prompts and VCB messages and UserText input to make sense for fra
 Keystroke Tab to cycle forward through timber orientation (and maybe Shift+Tab to go backwards?) - to flip cross section left-right, top-bottom, or both, or back to original.
 
 When viewing 'up' the direction of @long_axis, re-orienting the cross-section goes in reverse to mouse rotation round pick point - to fix later.
+## v0.6.2.1
+Fixed non-aligned bounding box. Now create cross-section geometry at origin first, as a ComponentDefinition instead of a Group/ComponentInstance. Then insert an instance of the definition at the origin, and transform it into correct orientation and position, instead of drawing it directly at the @first_pick point.
+
+Doesn't yet handle swap orientation of cross-section - still to fix.
+
+Fixed extrusion going in wrong direction if @face.normal and @long_axis point in opposite directions.
+
+Attempted and didn't quite succeed in getting TAB key to flip cross-section orientation in X, Y, or both. Try again next version - most of the pieces are there, just have to work out where better to make the change and/or how to do it both in draw and create geometry.
+
+## v0.6.2.0
+Fixed an extra 90 rotation of drawn geometry after second click (by introducing @quad variable), so now profile cross-section goes where the last magenta image is drawn
+
+Started work on keeping the PushPull on cross-section face within this tool. Draws a vector along the long axis, which inferences to appropriate points, and calculates length along @long_axis.0
 
 ## v0.6.1.2
 Changed code to back off @quadrant from if..else..end to use modulus 4.
@@ -22,6 +33,8 @@ Changed code to back off @quadrant from if..else..end to use modulus 4.
 Fixed uninitialized @profile_points0 - now defined as empty array in activate.
 
 Removed unnecessary clone (copy) actions.
+
+Went too far, to a non-working state, and had to back off a lot of changes. This version (many changes undone) works, but still has wrong component origins, and misaligned bounding box for angled components.
 
 ## v0.6.1.1
 Finally got orientation of cross section to work without jittering by changing tack in how to do it.
