@@ -12,7 +12,11 @@ Tidy up Status Prompts and VCB messages and UserText input to make sense for fra
 
 Keystroke Tab to cycle forward through timber orientation (and maybe Shift+Tab to go backwards?) - to flip cross section left-right, top-bottom, or both, or back to original.
 
-When viewing 'up' the direction of @long_axis, re-orienting the cross-section goes in reverse to mouse rotation round pick point - to fix later.
+## v0.6.3.1
+Reversed rotation in draw_geometry, so profile follows mouse direction, when viewing up the @long_axis. Calculated angle between view.camera.direction and @long_axis - need to reverse rotation if angle is < 90 degrees. 
+
+Could improve by starting drawing in correct quadrant, but it is usable at the moment.
+
 ## v0.6.3.0
 Fixed misalignment (rotated orientation) of created component, which now is created where drawn
 

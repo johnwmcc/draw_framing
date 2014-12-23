@@ -1,4 +1,4 @@
-﻿ ## Draw Framing v0.6 rewrite from scratch
+﻿## Draw Framing v0.6 rewrite from scratch
 ## D:\Documents\GitHub\draw_framing\src\draw_framing\draw_framing.rb
 ## load "jwm_draw_framing/draw_framing.rb"
 ## Name: Draw Framing Tool
@@ -28,7 +28,7 @@ module JWM
 class DrawFraming
 #------------------
   puts "****************************"
-  puts "draw_framing.rb v0.6.3.0 loaded"
+  puts "draw_framing.rb v0.6.3.1 loaded"
   
   # Set up class variables to hold details of standard sizes of timber
 		@@profile_name = "PAR" # Key to currently selected profile type such as PAR, architrave etc 
@@ -360,6 +360,14 @@ class DrawFraming
 
           end # if @ip.face
           
+          #------------------------------
+          # Check whether the camera direction and long axis direction are the same way round
+          # If not, we have to circle the pick point in the other direction
+          camera_direction = view.camera.direction
+          camera_vs_long_axis = camera_direction.angle_between @long_axis
+          camera_vs_long_axis < 90.degrees ? @reverse_rotation = true : @reverse_rotation = false
+puts "@reverse_rotation = " + @reverse_rotation.to_s
+
           ## At this point, we should have the long axis set and the normal to it (vec5) set 
           #   in the plane normal to the long axis
           #------------------------------
@@ -387,11 +395,13 @@ class DrawFraming
           @tf4 = Geom::Transformation.rotation [0,0,0], @vec5, rotate4            
 #puts "@first_pick.position = " + @first_pick.position.to_s
           @rotate90_la = Geom::Transformation.rotation [0,0,0], @long_axis, 90.degrees
+          @rotate_minus90_la = Geom::Transformation.rotation [0,0,0], @long_axis, -90.degrees
 #  puts @rotate90_la.to_matrix 
 
-          # Calculate transform to mirror along Y-Z plane to swap orientation
-          @tf_swap = Geom::Transformation.scaling [0,0,0],-1,1,1
-          
+          # Calculate transform to mirror along X_AXIS to swap orientation
+          @tf_swap_x = Geom::Transformation.scaling [0,0,0],-1,1,1
+          # Calculate transform to mirror along Y_AXIS to swap orientation
+          @tf_swap_y = Geom::Transformation.scaling [0,0,0],1,-1,1
           # Combine the transformations @tf3 and @tf4 if they exist, otherwise leave @tf5 
           # as identity transform
           # if @tf3 && @tf4
@@ -807,14 +817,32 @@ class DrawFraming
         # If orientation (calculated from mouse position relative to first pick) is vertical 
         #   where it would otherwise be drawn horizontal, and vice versa,
         #   swap x and y coordinates of basic profile
-      if @swap_XY
-          @profile_points_a.each_index {|i| @profile_points0[i] = @profile_points_a[i].transform(@tf_swap)} # mirror X-coords
+      unless @reverse_rotation
+        if @swap_XY
+          @profile_points_a.each_index {|i| @profile_points0[i] = @profile_points_a[i].transform(@tf_swap_x)} # mirror X-coords
           # Reduce rotation by 90 degrees by reducing @quadrant
           @quad = (@quadrant + 3)%4 # Take modulus 4 to 'wrap around' @quadrant 0
-      else 
+        else 
           @profile_points0 = @profile_points_a.clone # original coordinates
           @quad = @quadrant
+        end
+      else # rotation reversed
+        if @swap_XY
+puts "@swap_XY = " + @swap_XY.to_s
+puts "@reverse_rotation = " + @reverse_rotation.to_s
+          @profile_points_a.each_index {|i| @profile_points0[i] = @profile_points_a[i].transform(@tf_swap_y)} # mirror Y-coords
+          # Reduce rotation by 90 degrees by reducing @quadrant
+          @quad = (3 - @quadrant)%4 # Take modulus 4 to 'wrap around' @quadrant 0
+puts "@quad = " + @quad.to_s
+        else
+puts "@swap_XY = " + @swap_XY.to_s
+puts "@reverse_rotation = " + @reverse_rotation.to_s
+          @profile_points0 = @profile_points_a.clone # original coordinates
+          @quad = (3 - @quadrant)%4
+puts "@quad = " + @quad.to_s
+        end        
       end
+
  # puts @swap_XY
  # puts @profile_points0.inspect
       # Reorient inserted profile
@@ -855,13 +883,20 @@ class DrawFraming
 		@profile_points1.each_index {|i| @profile_points[i] = @profile_points1[i].transform(@tf4)} 
 
     #See if mouse position requires profile to be reoriented
-    i = 1
+    
     # Rotate by 90 degrees about @long_axis @quad times
-    while i <= (@quad )%4 do
-      @profile_points.each_index {|i| @profile_points[i].transform! @rotate90_la }
-      i += 1
-    end  
-
+    i = 1
+    unless @reverse_rotation 
+      while i <= (@quad )%4 do
+        @profile_points.each_index {|i| @profile_points[i].transform! @rotate90_la }
+        i += 1
+      end
+    else
+      while i <= (@quadrant )%4 do
+        @profile_points.each_index {|i| @profile_points[i].transform! @rotate_minus90_la }
+        i += 1
+      end  
+    end
     # Relocate profile to first pick point (transform @tf2) 
     @profile_points.each_index {|i| @profile_points[i].transform!(@tf2)}   
 
