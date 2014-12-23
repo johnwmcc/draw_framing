@@ -28,7 +28,7 @@ module JWM
 class DrawFraming
 #------------------
   puts "****************************"
-  puts "draw_framing.rb v0.6.2.1 loaded"
+  puts "draw_framing.rb v0.6.3.0 loaded"
   
   # Set up class variables to hold details of standard sizes of timber
 		@@profile_name = "PAR" # Key to currently selected profile type such as PAR, architrave etc 
@@ -413,7 +413,7 @@ class DrawFraming
 				# self.reset(view)
         @state = 2 
 			end # if @ip2.valid
-      txt = "Press TAB key to flip cross-section along X, Y, both, or neither direction"
+      txt = "Pick or type distance to set component length"
       Sketchup::set_status_text(txt, SB_PROMPT)
     when 2 # Fix the length of the component on third click or onLButtonUp
       @state = 3
@@ -856,19 +856,11 @@ class DrawFraming
 
     #See if mouse position requires profile to be reoriented
     i = 1
-    if @swap_XY
-      # Rotate by 90 degrees about @long_axis @quad times
-      
-      while i <= (@quad )%4 do
-        @profile_points.each_index {|i| @profile_points[i].transform! @rotate90_la }
-        i += 1
-      end  
-    else 
-      while i <= @quad do
-        @profile_points.each_index {|i| @profile_points[i].transform! @rotate90_la }
-        i += 1
-      end  
-    end # if @swap_XY
+    # Rotate by 90 degrees about @long_axis @quad times
+    while i <= (@quad )%4 do
+      @profile_points.each_index {|i| @profile_points[i].transform! @rotate90_la }
+      i += 1
+    end  
 
     # Relocate profile to first pick point (transform @tf2) 
     @profile_points.each_index {|i| @profile_points[i].transform!(@tf2)}   
@@ -902,10 +894,11 @@ class DrawFraming
      # Flip X, Y, both or neither to orient face
  
 # puts "flip state = " + @flip.to_s
-     
+      view.line_width = 3
       view.drawing_color = "magenta" 
       view.draw_polyline(@profile_points)
       view.draw_line @first_pick.position, @first_pick.position.offset(@long_axis, @frame_length)
+      view.draw_points @first_pick.position.offset(@long_axis, @frame_length), 8, 1, "magenta"
     end # case @state
 end # draw_geometry
   
@@ -939,28 +932,40 @@ end # draw_geometry
 # puts "@comp_defn class = " + @comp_defn.class.to_s   
 
         @face = ents.add_face(@profile_points0)
-        @face.reverse!
+
         # Insert an instance of the component at the origin
         @model.active_entities.add_instance(@comp_defn, @tf_identity)
 #puts "@face.vertices = " + @face.vertices.inspect.to_s
 
 				@last_drawn = [@comp_defn]
-        # Orient face normal to @long_axis and correctly oriented
+
+        # Orient face normal to @long_axis and correctly oriented: four steps
+        # 1. Rotate the cross-section around Z_AXIS at world or component origin 
+        #   to align with @face.normal
 				@comp_defn.instances[-1].transform!(@tf3)
+
+        # 2. Revolve around normal to the Z_AZIS and the @face.normal
         @comp_defn.instances[-1].transform!(@tf4)
-				@comp_defn.instances[-1].transform!(@tf6)
-        
-        # Move inserted component face from origin to pick point
+
+        # 3. Rotate by 90 degrees about @long_axis @quad times
+        i=1
+        while i <= @quad do
+            @comp_defn.instances[-1].transform!(@rotate90_la)
+          i += 1
+        end
+       
+        # 4. Move inserted component face from origin to pick point
 				@comp_defn.instances[-1].transform!(@tf2)			 
+
+        # Select only the newly created face inside the component
 				@model.selection.clear
 				@model.selection.add @face 
-				@face.reverse!
-      # Operation cancelled 
+
+      # If operation cancelled 
 			else
 				@model.abort_operation # alternative way to cancel
 				view.refresh  
 				self.reset(view)
-
 			end # if comp_name
 		end # if @state < 2    
 # ------------------------
