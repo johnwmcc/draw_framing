@@ -12,13 +12,39 @@ Tidy up Status Prompts and VCB messages and UserText input to make sense for fra
 
 Keystroke Tab to cycle forward through timber orientation (and maybe Shift+Tab to go backwards?) - to flip cross section left-right, top-bottom, or both, or back to original.
 
+Minor glitches still to fix:
+- @face is left drawn if component name input box is cancelled
+
+
+
+##v.0.7.0
+Finally fixed difference between reported Face.normal and geometric direction of @long_axis, by introducing a new variable @apparent_normal, and using it JUST to calculate where to display long axis in draw_geometry for @state == 1 and 2. For reasons I don't understand, using the (wrong) face.normal still draws the face profile_points array in the right plane, rotating about the wrong @long_axis.
+
+Needed to distinguish cases of 1. Face in a ComponentInstance, 2. Face in a group, and 3. 'Loose' geometry face. 
+
+Found and fixed minor loose ends
+-  finish creating component didn't deselect @face 
+Still to fix
+- cancel component naming still leaves @face drawn and doesn't clear drawn (feedback) geometry
+
+
+## v0.6.3.3
+Thought I had it all fixed and working, then discovered an anomaly in the way Face.normal works. If picked face is part of a (closed) rotated component, Face.normal doesn't take account of component rotation, just the direction of the normal to the picked face BEFORE rotation. Furthermore, when I correct the @long_axis vector to get it to point in the correct (geometrical) direction, this threw off the (previously working) calculation of @vec5 - normal to Z_AXIS and face normal. Took hours to work out how to compensate for this. 
+
+Had to revert to v0.6.3.1 and go forward from there
+
+## v0.6.3.2
+Fixed mis-alignment of drawn and created cross-sections
+
 ## v0.6.3.1
 Reversed rotation in draw_geometry, so profile follows mouse direction, when viewing up the @long_axis. Calculated angle between view.camera.direction and @long_axis - need to reverse rotation if angle is < 90 degrees. 
 
 Could improve by starting drawing in correct quadrant, but it is usable at the moment.
 
+Found later that the cross-section on a reversed face is created 90 degrees round from drawn section. Need to fix in later version.
+
 ## v0.6.3.0
-Fixed misalignment (rotated orientation) of created component, which now is created where drawn
+Fixed misalignment (rotated orientation) of created component, which now is created where drawn, and changed PAR profile back to rectangular. But now find that face normal and drawn line to set component length aren't in same direction when face is angled.
 
 ## v0.6.2.1
 Fixed non-aligned bounding box. Now create cross-section geometry at origin first, as a ComponentDefinition instead of a Group/ComponentInstance. Then insert an instance of the definition at the origin, and transform it into correct orientation and position, instead of drawing it directly at the @first_pick point.

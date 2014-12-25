@@ -28,7 +28,7 @@ module JWM
 class DrawFraming
 #------------------
   puts "****************************"
-  puts "draw_framing.rb v0.6.3.1 loaded"
+  puts "draw_framing.rb v0.7.0 loaded"
   
   # Set up class variables to hold details of standard sizes of timber
 		@@profile_name = "PAR" # Key to currently selected profile type such as PAR, architrave etc 
@@ -72,8 +72,9 @@ class DrawFraming
 
     # Declare vector to become the direction of the long axis of timber to be placed
     # defaults to Z_AXIS on initialization
-    @long_axis = Z_AXIS.clone #Geom::Vector3d.new 0,0,1 
-    @frame_length = 1.0
+     Z_AXIS.clone #Geom::Vector3d.new 0,0,1 
+    @frame_length = 2.0.inch # arbitrary value to start with
+    @apparent_normal = Z_AXIS
   end # initialize
 
 #------------------
@@ -262,7 +263,7 @@ class DrawFraming
           # Calculate length along axis
           how_long = @first_pick.position.distance @ip3.position
           vec = @first_pick.position.vector_to @ip3.position
-          angl = vec.angle_between  @long_axis
+          angl = vec.angle_between  @apparent_normal
           @frame_length = Math.cos(angl) * how_long
 # puts "Frame length = " + @frame_length.to_s
           Sketchup::set_status_text "Length" , SB_VCB_LABEL
@@ -295,6 +296,7 @@ class DrawFraming
           # from origin to first pick point
           @first_pick = @ip1
           @tf = @first_pick.transformation
+
 # puts "@tf = " + @tf.to_matrix
           # Update state to show first click has been processed
           @state = 1
@@ -313,75 +315,87 @@ class DrawFraming
 
           #--------------------------------
           # Get profile shape from @profile 
-       
-       
           # Original orientation is horizontal (vertical when rotated to second or fourth quadrant)
           @profile_points_a = @profile[2..-1] # Get profile points from original (horizontal) profile
- # puts "@profile_points_a = " + @profile_points_a.inspect.to_s
-          # When profile is opposite orientation, then swap x, y coords
-          # @profile_points_b = swap_xy @profile_dup.clone 
- # puts "@profile_points_b = " + @profile_points_b.inspect.to_s
-          #------------------------------
+ 
+          ##------------------------------
           ## Detect if pick point is on a face, and if so, orient long axis normal to it
           #   unless axis is locked
           if @ip.face 
             f = @ip.face
-# puts "@ip.face = " + @ip.face.inspect.to_s
-# puts  "Face picked: normal is \n"
-# puts f.normal.inspect
-            if @@axis_lock == NO_LOCK # axis not locked
-              @long_axis = f.normal
-            else
-              @long_axis = @@axis_lock
-            end
 
-            #------------------------------
-            # Calculate vector which is the projection of the @long_axis onto the x-y (red-green) plane
-            vec3 = Geom::Vector3d.new @long_axis.x, @long_axis.y, 0
-            # Get angle between vec3 and X_AXIS, and calculate its sign
-            if @long_axis.y < 0.0
-              rotate3 = -(X_AXIS.angle_between vec3)
+ ## There's an apparent bug in Face.normal method for a face in component (but not in a group),
+ ## which reports the normal of face without taking account of the orientation of the component
+            normal_vector = f.normal # uncorrected normal vector
+            if f.parent.is_a? Sketchup::ComponentDefinition # but not a group
+              if not f.parent.group? # then its a component, and needs correction
+                @tf_comp = f.parent.instances[0].transformation
+                @apparent_normal = f.normal.transform @tf_comp # corrected vector
+              else # it's a group and doesn't need correction
+                @apparent_normal = f.normal
+              end
+            else # it's a loose face and doesn't need correction either
+              @apparent_normal = f.normal
+            end
+# puts "transformed normal is " + normal_vector.inspect.to_s           
+            if @@axis_lock == NO_LOCK # axis not locked
+              @long_axis = f.normal # uncorrected vector works to draw profile and @vec5
             else
-              rotate3 = X_AXIS.angle_between vec3 
-            end # if @long_axis.y
-#  puts "rotate3 angle = " + rotate3.radians.to_s
-            
-            # Set up transform to rotate the cross-section by this amount around Z_AXIS at world or component origin 
-            @tf3 = Geom::Transformation.rotation [0,0,0], Z_AXIS, rotate3
+              @long_axis = @@axis_lock # Set to defined lock
+            end
+# puts "@long_axis = " + @long_axis.inspect
 
           #------------------------------
           else # no face at pick point
             # When no face picked, default long axis to Z_AXIS if no axis lock set 
             if @@axis_lock == NO_LOCK 
               @long_axis = Z_AXIS
+              @apparent_normal = Z_AXIS
             else
               @long_axis = @@axis_lock
+              @apparent_normal = @@axis_lock
             end #if @@axis_lock
 
           end # if @ip.face
           
+        #------------------------------
+          # Calculate vector which is the projection of the @long_axis onto the x-y (red-green) plane
+          vec3 = Geom::Vector3d.new @long_axis.x, @long_axis.y, 0
+          # Get angle between vec3 and X_AXIS, and calculate its sign
+          if @long_axis.y < 0.0
+            rotate3 = - (X_AXIS.angle_between vec3)
+          else
+            rotate3 = X_AXIS.angle_between vec3 
+          end # if @long_axis.y
+  puts "rotate3 angle = " + rotate3.radians.to_s
+          
+          # Set up transform to rotate the cross-section by this amount around Z_AXIS at world or component origin 
+          @tf3 = Geom::Transformation.rotation [0,0,0], Z_AXIS, rotate3         
           #------------------------------
           # Check whether the camera direction and long axis direction are the same way round
           # If not, we have to circle the pick point in the other direction
           camera_direction = view.camera.direction
           camera_vs_long_axis = camera_direction.angle_between @long_axis
           camera_vs_long_axis < 90.degrees ? @reverse_rotation = true : @reverse_rotation = false
-puts "@reverse_rotation = " + @reverse_rotation.to_s
+# puts "@reverse_rotation = " + @reverse_rotation.to_s
 
-          ## At this point, we should have the long axis set and the normal to it (vec5) set 
-          #   in the plane normal to the long axis
           #------------------------------
           # Calculate the rotation axis for the second transformation as the normal 
           #   to the Z_AXIS/@long_axis plane, which is the cross-product of the 
           #   @long_axis and the Z_AXIS vectors, unless @long_axis is Z_AXIS or its reverse
-          if @long_axis != Z_AXIS && @long_axis != Z_AXIS.clone.reverse!
+          unless (@long_axis.parallel? Z_AXIS) || (@long_axis.parallel? Z_AXIS.clone.reverse)
+puts "@long_axis NOT parallel to Z-axis"
             @vec5 = Z_AXIS.cross @long_axis
           else
+puts "@long_axis IS parallel to Z-axis"
             @vec5 = Y_AXIS
-          end # if @long_axis
-#puts "@long_axis = " + @long_axis.inspect.to_s
-#puts "@vec5 = " + @vec5.inspect.to_s
+          end # unless @long_axis
 
+puts "@long_axis = " + @long_axis.inspect.to_s
+puts "@vec5 = " + @vec5.inspect.to_s
+
+          ## At this point, we should have the long axis set and the normal to it (vec5) set 
+          #   in the plane normal to the long axis and to the Z_AXIS
           #------------------------------
           # Define third transform to finish rotating cross section into picked face plane, 
           #   or normal to chosen axis lock
@@ -389,11 +403,11 @@ puts "@reverse_rotation = " + @reverse_rotation.to_s
           # Calculate angle between @long_axis and the Z_AXIS
 #puts "@long_axis= " + @long_axis.inspect.to_s            
           rotate4 = @long_axis.angle_between Z_AXIS
-#puts "rotate4 angle = " + rotate4.radians.to_s 
+puts "rotate4 angle = " + rotate4.radians.to_s 
           # Define 90 degree rotation about pick point around long axis vector
           #  which will be needed if cross section needs to be rotated into desired orientation
           @tf4 = Geom::Transformation.rotation [0,0,0], @vec5, rotate4            
-#puts "@first_pick.position = " + @first_pick.position.to_s
+puts "@first_pick.position = " + @first_pick.position.to_s
           @rotate90_la = Geom::Transformation.rotation [0,0,0], @long_axis, 90.degrees
           @rotate_minus90_la = Geom::Transformation.rotation [0,0,0], @long_axis, -90.degrees
 #  puts @rotate90_la.to_matrix 
@@ -415,7 +429,7 @@ puts "@reverse_rotation = " + @reverse_rotation.to_s
 					@ydown = y
         end #if @ip1.valid?
 
-    when 1
+    when 1 #First click has been made
 
       # Create the cross-section on the second click
 			if( @ip2.valid? )
@@ -431,7 +445,7 @@ puts "@reverse_rotation = " + @reverse_rotation.to_s
       # puts "@frame_length = " + @frame_length.to_s
       self.create_geometry(@first_pick.position,@ip3.position, view)
     else
-      puts "@state not a valid value"
+      puts "@state not a valid value" + @state.to_s
 		end #case @state
     # Clear any inference lock
     view.lock_inference
@@ -456,14 +470,14 @@ puts "@reverse_rotation = " + @reverse_rotation.to_s
 
 #------------------
   def onRButtonDown flags, x, y, view
-    puts "onRButtonDown called"
+# puts "onRButtonDown called"
     # Load plugin-specific R-click context menu
 		getMenu()
 	end
 
 #------------------
   def onRButtonUp flags, x, y, view
-    puts "onRButtonUp called"
+#    puts "onRButtonUp called"
     # does nothing in this Tool
 	end
    
@@ -548,7 +562,7 @@ puts "@reverse_rotation = " + @reverse_rotation.to_s
       bb_centre = @face.bounds.center
       flip_x = Geom::Transformation.scaling bb_centre, -1.0,1.0,1.0
       flip_y = Geom::Transformation.scaling bb_centre, 1.0,-1.0,1.0
-      #if @comp_defn.instances[-1] # don't try unless there's something created 
+      if @comp_defn.instances[-1] # don't try unless there's something created 
           case @flip 
           when 0 # flip X
             @comp_defn.instances[-1].transform! flip_x
@@ -561,7 +575,7 @@ puts "@reverse_rotation = " + @reverse_rotation.to_s
             @comp_defn.instances[-1].transform! flip_y
           end # case @flip
         end # if@comp_defn.instances[-1]
-#      end # if @state
+      end # if @state
     end # case key
 
  #   puts"Selected axis = " + @@axis_lock.inspect.to_s
@@ -574,7 +588,6 @@ puts "@reverse_rotation = " + @reverse_rotation.to_s
 #------------------
   def onKeyUp key, repeat, flags, view
     #force redraw
-    view.invalidate
     view.refresh    
   end
   
@@ -741,8 +754,9 @@ puts "@reverse_rotation = " + @reverse_rotation.to_s
       width = @n_size[p_size][1]
       thickness = @n_size[p_size][2]
       # PAR is simply a rectangle with width and thickness, drawn in the x, y (red/green) plane
+       profile = ["PAR", @n_size[p_size][0],[0,0,0],[width,0,0],[width,thickness,0],[0,thickness,0],[0,0,0]]
       # For testing, put in an angle
-      profile = ["PAR", @n_size[p_size][0],[0,0,0],[0.5*width,0,0],[width,0.5*thickness,0],[width,thickness,0],[0,thickness,0],[0,0,0]]
+      # profile = ["PAR", @n_size[p_size][0],[0,0,0],[0.5*width,0,0],[width,0.5*thickness,0],[width,thickness,0],[0,thickness,0],[0,0,0]]
       # Make an array of just the profile points
       @profile_points_a = profile[2..-1]
       return profile
@@ -808,7 +822,7 @@ puts "@reverse_rotation = " + @reverse_rotation.to_s
     # Vector from component or world origin 
       origin = @tf.origin
 # puts "origin = " + origin.inspect.to_s
-      vec = origin.vector_to(pt1) # Vector from there to pick point
+      vec = origin.vector_to(@first_pick.position) # Vector from there to pick point
 # puts "vec = " + vec.inspect.to_s
       # Calculate transformation from component or world origin to first pick point
       @tf2 = translate(@tf,vec) # Uses Martin Rinehart's translate function included below
@@ -826,20 +840,20 @@ puts "@reverse_rotation = " + @reverse_rotation.to_s
           @profile_points0 = @profile_points_a.clone # original coordinates
           @quad = @quadrant
         end
-      else # rotation reversed
+      else # rotation reversed (viewing down @long_axis)
         if @swap_XY
-puts "@swap_XY = " + @swap_XY.to_s
-puts "@reverse_rotation = " + @reverse_rotation.to_s
+# puts "@swap_XY = " + @swap_XY.to_s
+# puts "@reverse_rotation = " + @reverse_rotation.to_s
           @profile_points_a.each_index {|i| @profile_points0[i] = @profile_points_a[i].transform(@tf_swap_y)} # mirror Y-coords
           # Reduce rotation by 90 degrees by reducing @quadrant
-          @quad = (3 - @quadrant)%4 # Take modulus 4 to 'wrap around' @quadrant 0
-puts "@quad = " + @quad.to_s
+          @quad = (4 - @quadrant)%4 # Take modulus 4 to 'wrap around' @quadrant 0
+# puts "@quad = " + @quad.to_s
         else
-puts "@swap_XY = " + @swap_XY.to_s
-puts "@reverse_rotation = " + @reverse_rotation.to_s
+# puts "@swap_XY = " + @swap_XY.to_s
+# puts "@reverse_rotation = " + @reverse_rotation.to_s
           @profile_points0 = @profile_points_a.clone # original coordinates
-          @quad = (3 - @quadrant)%4
-puts "@quad = " + @quad.to_s
+          @quad = (4 - @quadrant)%4
+# puts "@quad = " + @quad.to_s
         end        
       end
 
@@ -907,16 +921,17 @@ puts "@quad = " + @quad.to_s
       # Display long axis as visual feedback
       #@long_axis.transform!(@tf2)
       view.line_width = 2; view.line_stipple = ""
-      view.set_color_from_line(pt1 - @long_axis, pt1 + @long_axis)
-      view.draw_line(@first_pick.position, @first_pick.position + @long_axis) # to show direction of long axis of wood  
+      view.set_color_from_line(pt1, pt1 + @apparent_normal)
+      view.draw_line(@first_pick.position, @first_pick.position + @apparent_normal) # to show direction of long axis of wood  
       
 
       # end
       # Draw normal to Z_AXIS/face.normal in orange
-# puts "@vec5.to_a = " + @vec5.inspect.to_s, @vec5.to_a.to_s
+#puts "@vec5 = " + @vec5.to_a.to_s, (@vec5.to_a.transform @tf2).to_s
+#puts @tf2.to_matrix 
       pt3 = @vec5.to_a.transform @tf2
       view.drawing_color = "orange" 
-      view.draw_line(pt1,pt3)
+      view.draw_line(@first_pick.position,pt3)
       
       view.drawing_color = "magenta" 
       view.draw_polyline(@profile_points)
@@ -929,11 +944,14 @@ puts "@quad = " + @quad.to_s
      # Flip X, Y, both or neither to orient face
  
 # puts "flip state = " + @flip.to_s
+# puts "@first_pick.position = " + @first_pick.position.inspect.to_s
+# puts "@long_axis = " + @long_axis.inspect
+# puts "@frame_length = " + @frame_length.to_s
       view.line_width = 3
       view.drawing_color = "magenta" 
       view.draw_polyline(@profile_points)
-      view.draw_line @first_pick.position, @first_pick.position.offset(@long_axis, @frame_length)
-      view.draw_points @first_pick.position.offset(@long_axis, @frame_length), 8, 1, "magenta"
+      view.draw_line @first_pick.position, @first_pick.position.offset(@apparent_normal, @frame_length)
+      view.draw_points @first_pick.position.offset(@apparent_normal, @frame_length), 8, 1, "magenta"
     end # case @state
 end # draw_geometry
   
@@ -956,9 +974,8 @@ end # draw_geometry
 			# @ents = @grp.entities
 
       # Define cross-section and name it
-
 			comp_defn_name = UI.inputbox ["Component name "],["Frame element"],"Name this component " 
-			if comp_defn_name # isn't nil (naming inputbox not cancelled)
+			if comp_defn_name # inputbox was not cancelled)
         @comp_defn.name = @n_size[@chosen_size][0] + " " + comp_defn_name[0].to_s
 				@comp_defn.description = @n_size[@chosen_size][0] + " "  +comp_defn_name[0].to_s
         
@@ -998,13 +1015,12 @@ end # draw_geometry
 
       # If operation cancelled 
 			else
-				@model.abort_operation # alternative way to cancel
-				view.refresh  
-				self.reset(view)
+        @model.abort_operation # alternative way to cancel
+        self.reset(view)
 			end # if comp_name
 		end # if @state < 2    
 # ------------------------
-      if @state == 3 
+      if @state == 3 && @face # a component face has been drawn
       # Pushpull cross-section to length
 #puts "create_geometry called state 3"
         if @face.normal == @long_axis
@@ -1014,6 +1030,7 @@ end # draw_geometry
         end
 #puts "@comp_defn.instances[-1] = " + @comp_defn.instances[0].to_s
         @comp_defn.name = @profile[0] + " " + @n_size[@chosen_size][0] + " x " + @frame_length.to_l.to_s
+        @model.selection.clear
         self.reset(view)
         @model.commit_operation
       end # if @state == 3
@@ -1024,7 +1041,7 @@ end # draw_geometry
   def suspend(view)
     puts "suspend called"
     # Sketchup.send_action( 'selectPushPullTool:' )
-  end
+  end 
   
 #------------------
   def resume(view)
