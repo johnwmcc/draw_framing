@@ -1,7 +1,7 @@
 #D:/Documents/GitHub/draw_framing/src/jwm_draw_framing/draw_framing.rb
 Change log
 
-Still to do/planned changes:
+** Still to do/planned changes:
 Separate out profile at origin (@profile_points) from final drawn profile (profile_points_final)  translated to pick point, so when creating profile, it can be drawn as a component at the origin, then translated to pick point and will have aligned axes. [Mostly done, but not quite right yet for swapped rotation]
 
 When creating new framing component, check to see if same size one exists already and use same definition.
@@ -14,8 +14,37 @@ Keystroke Tab to cycle forward through timber orientation (and maybe Shift+Tab t
 
 Minor glitches still to fix:
 - @face is left drawn if component name input box is cancelled
+##v.0.7.2.2
+Simplified version to try to debug why my transforms are changing BOTH original and shif/rotated copy of  @profile_pointsH. 
 
+Stripped out most code after draw_geometry that for the moment just draws profile at origin. 
 
+Not even working properly but shows  @profile_pointsV AND  @profile_pointsH both changing as you move the mouse around the pick point - V is orange 3px wide, H is black 1px wide.
+
+##v.0.7.2.1
+Refactored code to introduce PointsArray class, with methods to manipulate arrays fo points.
+
+Moved code to calculate quadrant and swap_XY status to find_octant function.
+
+Still to revamp almost all the draw_geometry and create_geometry functions.
+
+Stuck when I can't get @profile_pointsV to set to shift and rotate @profile_pointsH without changing both copies.
+
+##v.0.7.2
+Got draw_geometry to show wireframe outline of component to be drawn, and to orient correctly for upright vs horizontal orientation in each quadrant. Works for front faces, but orientation doesn't work for back view and reverse views, to rotate with the mouse round the pick point (not opposite).
+
+Also works flipping profile along X, Y, or both axes when profile is drawn swapped in a odd quadrant so Y direction has become width, not thickness, and/or is  shifting down when orientation is vertical rather than horizontal.
+
+And create_geometry does now not follow rotation properly.
+
+But getting closer. However, time to rethink in object terms I think - introduce a Class PointsArray, and define methods to rotate, flipX and flipY, and re-orient (drop in thickness, then rotate 90 about X). Task for parallel development and/or next mainstream version.
+
+in the meantime, I could revert to v0.7.0 which works for rectangular profiles.
+
+##v.0.7.1
+Started trying to get TAB key to invert @face component instance, flipping about center of bounding box of component instance @comp_defn[-1] (last instance drawn).
+Works when drawn orthogonally on an axis, but wrong on 'loose' face misaligned to both X and Y axes, half wrong on component or group only rotated about Z axis (Y-axis flip works).
+Must try again with more time, either to transform @profile_points0 array, and redraw everything, or try to work out transformations to get @face temporarily transformed back to origin before flipping.
 
 ##v.0.7.0
 Finally fixed difference between reported Face.normal and geometric direction of @long_axis, by introducing a new variable @apparent_normal, and using it JUST to calculate where to display long axis in draw_geometry for @state == 1 and 2. For reasons I don't understand, using the (wrong) face.normal still draws the face profile_points array in the right plane, rotating about the wrong @long_axis.
