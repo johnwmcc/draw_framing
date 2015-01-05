@@ -14,6 +14,11 @@ Keystroke Tab to cycle forward through timber orientation (and maybe Shift+Tab t
 
 Minor glitches still to fix:
 - @face is left drawn if component name input box is cancelled
+##v.0.7.2.3
+2015-01-05 12:41 AM
+Got back to a working version that goes as far as draw_geometry in the right place, except that flipping by TAB key doesn't do anything.
+Fixed (I think) a minor bug in calculating @vec5 - used to test for normal parallel to Z_AXIS, but sometimes this would miss near-parallel, and set @vec5 to Y_AXIS instead of normal. Now test if the cross product has a value. Seems more reliable so far.
+
 ##v.0.7.2.2
 Simplified version to try to debug why my transforms are changing BOTH original and shif/rotated copy of  @profile_pointsH. 
 

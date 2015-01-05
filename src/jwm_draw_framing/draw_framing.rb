@@ -28,7 +28,7 @@ module JWM
 class DrawFraming
 ##------------------
   puts "****************************"
-  puts "draw_framing.rb v0.7.2.2 loaded"
+  puts "draw_framing.rb v0.7.2.5 loaded"
   
   ## Set up class variables to hold details of standard sizes of timber
 		@@profile_name = "PAR" ## Key to currently selected profile type such as PAR, architrave etc 
@@ -74,9 +74,14 @@ class DrawFraming
 
     ## Declare vector to become the direction of the long axis of timber to be placed
     ## defaults to Z_AXIS on initialization
-     Z_AXIS.clone ##Geom::Vector3d.new 0,0,1 
+    Z_AXIS.clone ##Geom::Vector3d.new 0,0,1     
+    @flip       = 0 ## flip state - cycles through 0-3 for noflip, flipY, flipXY, or flipX
+    ## Default initially to (blue) z-axis for long dimension of timber
+    ##   to avoid problems if first pick is not on a face and no axis 
+    ##   has been specified by arrow key
+    @@axis_lock = Geom::Vector3d.new
+    @@axis_lock = NO_LOCK
 
-    @apparent_normal = Z_AXIS
   end ## initialize
 
 ##------------------
@@ -85,11 +90,8 @@ class DrawFraming
 
     ## Establish array to store axis toggle state
     ## Axis_lock = one of the AXES if locked, or Vector3d(0,0,0) for not locked
-    @@axis_lock = Geom::Vector3d.new
-    ## Default initially to (blue) z-axis for long dimension of timber
-    ##   to avoid problems if first pick is not on a face and no axis 
-    ##   has been specified by arrow key
-    @@axis_lock = NO_LOCK
+
+
 
     ## Default axis of rotation when picking on blank screen 
     ##@vec5 = Geom::Vector3d.new 0,1,0    
@@ -120,14 +122,14 @@ class DrawFraming
 
     ## The Sketchup::InputPoint class is used to get 3D points from screen positions
     ## It uses the SketchUp inferencing code.
-    ## In this tool, we will have one insertion point and a second to determine orientation.
+    ## In this tool, we will have one insertion point, a second to determine orientation, and a third to determing length of component.
     @ip         = Sketchup::InputPoint.new
     @ip1        = Sketchup::InputPoint.new
     @ip2        = Sketchup::InputPoint.new
     @ip3        = Sketchup::InputPoint.new
     @drawn      = false
     @last_drawn = nil
-    @flip       = 0 ## flip state - cycles through 0-3 for noflip, flipY, flipXY, or flipX
+
 
     Sketchup::set_status_text("Pick first corner for timber profile, and/or set a long axis direction using cursor key to toggle on/off: Right = red (X); Left = green (Y); Up or Down= blue (Z) direction", SB_PROMPT)
     ## Get profile of default or last selected size
@@ -159,7 +161,8 @@ class DrawFraming
     
     @profile_points4 = PointsArray.new
     @frame_length = 0.001.inch ## small non-zero value to start with
-
+    @apparent_normal = Z_AXIS
+    @reported_normal = Z_AXIS
     ## Display chosen size at cursor
     @cursor_text = "\n\n" + @profile[1] 
     self.reset(nil)
@@ -228,7 +231,7 @@ class DrawFraming
       ##----------------------------------------------------
       ## Compare current mouse position with first pick point to determine which quadrant 
       ##   and orientation to draw cross section in (remember, screen coords have +y = downwards)
-      diff_x = x - view.screen_coords(@first_pick)[0]
+      diff_x = x - view                 .screen_coords(@first_pick)[0]
       diff_y = y - view.screen_coords(@first_pick)[1]
       
       ## See whether mouse position relative to @first_pick is nearer vertical than horizontal, 
@@ -236,25 +239,6 @@ class DrawFraming
       @octant = find_octant(diff_x, diff_y) ## call function to check orientation and quadrant of mouse position
       @quadrant = (@octant/2).to_int
 ## puts "@quadrant = " + @quadrant.to_s
-      ## Orient profile accordingly (H or V)
-      case @octant%2 
-      when 0 ## even octant, horizontal profile needed
-puts "Even octant - horizontal profile"
-        @profile_points1 = @profile_pointsH.copy
-        case @flip ## Flip state 
-        when 0 ## No flip
-          @profile_points1 = @profile_pointsH.copy
-        when 1
-          @profile_points1 = @profile_pointsH.flipY
-        when 2
-          @profile_points1 = @profile_pointsH.flipXY
-        when 3
-          @profile_points1 = @profile_pointsH.flipX
-        end  
-      when 1 ## odd octant, profile needs to be shifted and rotated 
-puts "Odd octant - vertical profile"
-        @profile_points1 = @profile_pointsH.shiftYrotateZ90
-      end
 
 
 ## --------------------------------------------------------------------------
@@ -302,9 +286,9 @@ puts "Odd octant - vertical profile"
           ## call the transformation method to get the component/group instance Transformation vector
           ## from origin to first pick point
           @first_pick = @ip1
-          @tf = @first_pick.transformation
+          @tf = @ip1.transformation
 
-## puts "@tf = " + @tf.to_matrix
+# puts "@tf = " + @tf.to_matrix
           ## Update state to show first click has been processed
           @state = 1
 
@@ -318,7 +302,7 @@ puts "Odd octant - vertical profile"
           vec = origin.vector_to(@first_pick.position) 
           ## Calculate transformation from component or world origin to first pick point
           @tf2 = translate(@tf,vec) ## Uses Martin Rinehart's translate function included below
-## puts "@tf2 = " + @tf2.inspect.to_s  
+# puts "@tf2 = " + @tf2.to_matrix 
           ##------------------------------
           ## Create new transformation objects (the identity transformation by default) for later use
           @tf_identity = Geom::Transformation.new ## Identity transform to insert component at origin
@@ -332,9 +316,9 @@ puts "Odd octant - vertical profile"
           ## Get profile points from original (horizontal) profile
           ## Original orientation is horizontal (vertical when rotated to second or fourth quadrant)
           @profile_pointsH = PointsArray.new @profile[2..-1] 
- #puts "@profile_pointsH.contents = " + @profile_pointsH.contents.to_s
-          @profile_pointsV = @profile_pointsH.clone
-          @profile_pointsV.shiftYrotateZ90
+#  puts "@profile_pointsH.contents from @profile = " + @profile_pointsH.contents.to_s
+          @profile_pointsV = @profile_pointsH.shiftYrotateZ90
+          
  #puts "@profile_pointsV.class = " + @profile_pointsV.class.to_s
  #puts "@profile_pointsV.contents = " + @profile_pointsV.contents.inspect
           
@@ -351,12 +335,15 @@ puts "Odd octant - vertical profile"
               if not f.parent.group? ## then its a component, and needs correction
                 @tf_comp = f.parent.instances[0].transformation
                 @apparent_normal = f.normal.transform @tf_comp ## corrected vector
+                @reported_normal = f.normal
               else ## it's a group and doesn't need correction
                 @apparent_normal = f.normal
+                @reported_normal = f.normal
                 @tf_comp = @tf2
               end
             else ## it's a loose face and doesn't need correction either
               @apparent_normal = f.normal
+              @reported_normal = f.normal
               @tf_comp = @tf2
             end
 ## puts "transformed normal is " + normal_vector.inspect.to_s
@@ -407,11 +394,11 @@ puts "Odd octant - vertical profile"
           ## Calculate the rotation axis for the second transformation as the normal 
           ##   to the Z_AXIS/@reported_normal plane, which is the cross-product of the 
           ##   @reported_normal and the Z_AXIS vectors, unless @reported_normal is Z_AXIS or its reverse
-          unless (@reported_normal.parallel? Z_AXIS) || (@reported_normal.parallel? Z_AXIS.clone.reverse)
+          if (@reported_normal.angle_between Z_AXIS) > 0.01.degrees
             @vec5 = Z_AXIS.cross @reported_normal
-          else
-            @vec5 = Y_AXIS
-          end ## unless @reported_normal
+          else # otherwise you get undefined cross-product when @reported_normal is (near) parallel to Z_AXIS
+            @vec5 = Y_AXIS 
+          end ## if @reported_normal
 
           ## At this point, we should have the long axis set and the normal to it (vec5) set 
           ##   in the plane normal to the long axis and to the Z_AXIS
@@ -563,11 +550,12 @@ puts "Odd octant - vertical profile"
         end
       end
     when 9 ## Tab key: Cycle through flipX, flipY, flipXY, noflip
-## puts "@state = " + @state.to_s
-    if @state == 1   ## Only applicable when cross-section has been drawn
-        @flip = (@flip + 1)%4 
-
- ## puts "flip state = " + @flip.to_s
+puts "@state = " + @state.to_s
+    if @state == 1      ## Only applicable when cross-section has been drawn
+      @flip += 1      # Cycle @flip
+      @flip = @flip%4 # Take modulus 4 to wrap around 
+puts "flip state (TAB) = " + @flip.to_s
+      self.draw_geometry(@first_pick.position, @ip2.position, view)
       ##Reorient inserted profile
       ##If needed, flip profile in x, y, or both directions
       ## if @comp_defn.instances[-1] ## don't try unless there's something created 
@@ -587,7 +575,9 @@ puts "Odd octant - vertical profile"
 
  ##   puts"Selected axis = " + @@axis_lock.inspect.to_s
     ## force change of cursor on screen
-    self.onSetCursor() 
+    self.onSetCursor()
+    ## Redraw geometry with changed flip state or axis lock
+ # still to work out how to do!
     false
 
   end
@@ -784,6 +774,7 @@ puts "Odd octant - vertical profile"
     ## clear the InputPoints
     @ip1.clear
     @ip2.clear
+    @ip3.clear
     @ip.clear
 
     if( view )
@@ -824,67 +815,118 @@ puts "Odd octant - vertical profile"
 
     case @state
     when 1 ## After first click, waiting for second click or onLButtonUp
-      view.draw_points @first_pick.position, 12
+ #     view.draw_points @first_pick.position, 12
  # puts "Profile_pointsH = " + @profile_pointsH.contents.inspect
  # @profile_pointsV = @profile_pointsH.clone.flipY
-      view.draw_polyline(@profile_pointsH.contents)
-      view.line_width = 3
-      view.drawing_color = "orange" 
-      view.draw_polyline(@profile_pointsV.contents)
-        ## If orientation (calculated from mouse position relative to first pick) is vertical 
-        ##   where it would otherwise be drawn horizontal, and vice versa,
-        ##   rotate 90 degrees and drop by width coordinates of basic profile
+    #    view.draw_polyline(@profile_pointsH.contents)
+        # view.line_width = 2
+        # view.drawing_color = "magenta" 
+        # view.draw_polyline(@profile_points1.contents)
+      ## If orientation (calculated from mouse position relative to first pick) is vertical 
+      ## Orient profile accordingly (H or V)
+      case @octant%2 
+      when 0 ## even octant, horizontal profile needed
+puts "Even octant - horizontal profile"
+        @profile_points1 = @profile_pointsH.copy
+puts "@flip state = " + @flip.to_s
+      @profile_points1 = @profile_pointsH.copy
+        case @flip ## Flip state 
+        when 0 ## No flip
+# puts "@flip state = " + @flip.to_s
+        # nothing to do
+        when 1
+#puts "@profile_points1.contents before flip 1 = \n" + @profile_points1.contents.inspect
+# puts "@flip state = " + @flip.to_s
+          # @profile_points1.flipY
+#puts "@profile_points1.contents after flip 1 = \n" + @profile_points1.contents.inspect
+        when 2
+# puts "@flip state = " + @flip.to_s
+          # @profile_points1.flipXY
+        when 3
+# puts "@flip state = " + @flip.to_s
+          # @profile_points1.flipX
+          end  
+      when 1 ## odd octant, profile needs to be shifted and rotated 
+# puts "Odd octant - vertical profile"
+        @profile_points1 = @profile_pointsH.shiftYrotateZ90
+        case @flip ## Flip state 
+        when 0 ## No flip
+# puts "@flip state = " + @flip.to_s
+          #nothing to do
+        when 1
+          # @profile_points1.flipY
+        when 2
+          # @profile_points1.flipXY
+        when 3
+          # @profile_points1.flipX
+        end         
+      end
+# puts "@profile_points1.contents (A) after flip = \n" + @profile_points1.contents.inspect      
+      ## Rotate about Z_AXIS at origin so as to be parallel in the x-y (rg) plane to the face normal.
+  ##puts @tf3.to_matrix
+      @profile_points1.contents.each_index {|i| @profile_points2.contents[i] = @profile_points1.contents[i].transform(@tf3)} 
+# puts "@profile_points1 (B) after rotate3 = \n" + @profile_points1.contents.inspect      
+      ## The profile needs to be revolved about the line 
+      ##  which is normal to the Z_AZIS AND to the face.normal if on a face, 
+      ##  unless the face.normal or @@axis_lock IS the Z_AXIS, in which case no revolution needed.
+      ## And to get the normal, we took the cross-product of 
+      ##  the Z_AZIS and the face.normal in onLButtonDown.
+  
+      @profile_points2.contents.each_index {|i| @profile_points3.contents[i] = @profile_points2.contents[i].transform(@tf4)} 
 
-    ## Rotate about Z_AXIS at origin so as to be parallel in the x-y (rg) plane to the face normal.
-## puts @tf3.to_matrix
-    # @profile_points2.each_index {|i| @profile_points3[i] = @profile_points2[i].transform(@tf3)} 
-    
-    ## The profile needs to be revolved about the line 
-    ##  which is normal to the Z_AZIS AND to the face.normal if on a face, 
-    ##  unless the face.normal or @@axis_lock IS the Z_AXIS, in which case no revolution needed.
-    ## And to get the normal, we took the cross-product of 
-    ##  the Z_AZIS and the face.normal in onLButtonDown.
+      ##See if mouse position requires profile to be reoriented
+      
+      ## Rotate by 90 degrees about @reported_normal @quad times
+      i = 1
+# puts "Reverse? " + @reverse_rotation.to_s
+      unless @reverse_rotation 
+        while i <= (@quadrant + 2)%4 do
+          @profile_points3.contents.each_index {|i| @profile_points3.contents[i].transform! @rotate90_la }
+          i += 1
+        end
+      else # Rotation reversed. Need also to shift by 90 degrees for alternate octants to avoid back/forward rotation
+        while i <= (@quadrant + 1 + @octant%2)%4 do
+          @profile_points3.contents.each_index {|i| @profile_points3.contents[i].transform! @rotate_minus90_la }
+          i += 1
+        end  
+      end
+      # Relocate profile to first pick point (transform @tf_comp) 
+       @profile_points3.contents.each_index {|i| @profile_points3.contents[i].transform!(@tf2)}   
 
-		# @profile_points2.each_index {|i| @profile_points[i] = @profile_points3[i].transform(@tf4)} 
+# puts "@profile_points1 (C) before view.draw_polyline = \n" + @profile_points1.contents.inspect
 
-    ##See if mouse position requires profile to be reoriented
-    
-    ## Rotate by 90 degrees about @reported_normal @quad times
-    # i = 1
-    # unless @reverse_rotation 
-      # while i <= (@quadrant - 3 )%4 do
-        # @profile_points.each_index {|i| @profile_points[i].transform! @rotate90_la }
-        # i += 1
-      # end
-    # else
-      # while i <= (@quadrant - 2 )%4 do
-        # @profile_points.each_index {|i| @profile_points[i].transform! @rotate_minus90_la }
-        # i += 1
-      # end  
-    # end
-    # Relocate profile to first pick point (transform @tf2) 
-    # @profile_points.each_index {|i| @profile_points[i].transform!(@tf2)}   
-
- ##   	puts "@profile_points[] = \n" + @profile_points.to_a.inspect
-
-    
- 
       ## Display long axis as visual feedback
       ##@reported_normal.transform!(@tf2)
-      view.line_width = 2; view.line_stipple = ""
+      view.line_width = 1; view.line_stipple = ""
       view.set_color_from_line(pt1, pt1 + @apparent_normal)
-      view.draw_line(@first_pick.position, @first_pick.position + @apparent_normal) ## to show direction of long axis of wood  
-      
+      ## to show direction of long axis of wood 
+      view.draw_line(@first_pick.position, @first_pick.position + @apparent_normal)  
+      # view.drawing_color = "magenta" 
+      # view.line_width = 3
+      # view.draw_line(@first_pick.position, @first_pick.position + @reported_normal)  
 
       ## end
       ## Draw normal  to Z_AXIS/face.normal in orange
 ## puts "@vec5 = " + @vec5.to_a.to_s, (@vec5.to_a.transform @tf2).to_s
 ## puts @tf2.to_matrix 
+rotateZ = Geom::Transformation.rotation(ORIGIN, Z_AXIS,45.degrees)
+# puts rotateZ.to_matrix
       pt3 = @vec5.to_a.transform @tf2
-      view.drawing_color = "orange" 
+      view.set_color_from_line(@first_pick.position,pt3)
       view.draw_line(@first_pick.position,pt3)
+      view.line_width = 2
       view.drawing_color = "magenta" 
-##      view.draw_polyline(@profile[2..-1])
+      view.draw_polyline(@profile_points3.contents)
+      view.drawing_color = "orange" 
+      view.draw_polyline(@profile_points1.contents)
+      @profile_points5 = PointsArray.new @profile_points1.contents.clone
+      @@profile_points6 = PointsArray.new
+           
+      @profile_points5.each_index {|i| @profile_points6[i] = @profile_points5.contents[i].flip(Y_AXIS)}
+      view.line_width = 3
+      view.drawing_color = "blue" 
+      view.draw_polyline(@profile_points5)
+
 ## -------------------------------------------------------------------------------
     when 2 ## Cross-section drawn, waiting for drag or click to pushpull to length
       ## @frame_length was defined in onMouseMove @state == 2
@@ -1110,12 +1152,17 @@ class PointsArray < Array
 ## Methods for manipulating arrays of points 
   attr_accessor :contents
   def initialize(*args)
-    @contents = args[0]
+    @contents = []
+    if args[0].is_a?(Array)
+      for i in 0...args[0].size
+        @contents[i] = args[0][i].dup
+      end
+    end
   end
   
   def copy
   ## copies an array of points, element by element and returns a new array with copied contents
-    temp = self
+    temp = self.clone # Changed 2015-01-01 - was just self
     @contents.each_index {|i| temp[i] = @contents[i] }  
     return temp
   end
@@ -1125,11 +1172,14 @@ class PointsArray < Array
     ## Find the centre
     centrepoint = Geom::Point3d.linear_combination(0.5, @contents.min, 0.5, @contents.max)
     puts "centrepoint = " + centrepoint.to_s
-    temp = self.clone
+puts "@contents before flip = \n" + @contents.to_s
+    temp = @contents.clone
     ## Scale the array around the centrepoint to reverse the values along specified axis
-    flip = Geom::Transformation.scaling(centrepoint, -axis.x,-axis.y,-axis.z)
-    @contents.each_index {|i| temp[i] = @contents[i].transform(flip)}
-    return temp
+    tf_flip = Geom::Transformation.scaling(centrepoint, -axis.x,-axis.y,-axis.z)
+# puts tf_flip.to_matrix
+    @contents.each_index {|i| temp[i] = @contents[i].transform(tf_flip)}
+puts "temp.contents after flip = \n" + temp.contents.to_s
+    temp
   end
   
   def flipX
@@ -1164,12 +1214,12 @@ class PointsArray < Array
     rotateZ90 = Geom::Transformation.rotation [0,0,0],Z_AXIS, 90.degrees
 #puts rotateZ90.to_matrix
     ## Combine and transform from horizontal to vertical
-    temp = self.clone
+    temp = PointsArray.new
     @contents.each_index {|i| temp.contents[i] = @contents[i].transform (rotateZ90*shiftY)}
 # puts temp.class.to_s
 # puts temp.contents.inspect
 # puts @contents[0].class
-    temp
+    return temp
   end
   
 end ## class PointsArray
