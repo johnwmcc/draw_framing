@@ -28,7 +28,7 @@ module JWM
 class DrawFraming
 ##------------------
   puts "****************************"
-  puts "draw_framing.rb v0.7.2.6.1 loaded"
+  puts "draw_framing.rb v0.7.6.2 loaded"
   # Derived from v0.7.4 with elements from v0.7.2 pushpull draw working (only they aren't here, yet!)
   # Tried to invoke PushPullTool on suspend, but looks as if it isn't triggering in quite the right place
   # Working up to drawing face in (mostly) correct location and orientation
@@ -282,6 +282,7 @@ class DrawFraming
 		## When the user clicks the first time (@state changes from 0 to 1), we switch to getting the
 		## second point.	When they click a second time we show the planned cross-section
 		case @state
+    ##================================================
     when 0 ## before first click
 			@ip1.pick view, x, y
 				if( @ip1.valid? )
@@ -430,7 +431,7 @@ class DrawFraming
 					@xdown = x
 					@ydown = y
         end ##if @ip1.valid?
-
+    ##==================================================================
     when 1 ##First click has been made 
 
       # Create the cross-section on the second click
@@ -441,11 +442,14 @@ class DrawFraming
 			end ## if @ip2.valid
       txt = "Pick or type distance to set component length"
       Sketchup::set_status_text(txt, SB_PROMPT)
-     when 2 ## Fix the length of the component on third click or onLButtonUp
+    ##===================================================================
+    when 2 ## Fix the length of the component on third click or onLButtonUp
       @state = 3
       # puts "onLButtonDown " + @state.to_s
       # puts "@frame_length = " + @frame_length.to_s
       self.draw_geometry(@first_pick.position,@ip3.position, view)
+
+    ##===================================================================
     else
       puts "@state not a valid value" + @state.to_s
 		 end ##case @state
@@ -754,7 +758,7 @@ puts "flip state (TAB) = " + @flip.to_s
       ## Calculate profile points for selected PAR size
       width = @n_size[p_size][1]
       thickness = @n_size[p_size][2]
-      ## PAR is simply a rectangle with width and thickness, drawn in the x, y (red/green) plane
+      ## PAR is simply  a rectangle with width and thickness, drawn in the x, y (red/green) plane
 ##       profile = ["PAR", @n_size[p_size][0],[0,0,0],[width,0,0],[width,thickness,0],[0,thickness,0],[0,0,0]]
       ## For testing, put in an angle
        profile = ["PAR", @n_size[p_size][0],[0,0,0],[0.5*width,0,0],[width,0.5*thickness,0],[width,thickness,0],[0,thickness,0],[0,0,0]]
@@ -924,7 +928,7 @@ puts "@flip state = " + @flip.to_s
       # view.drawing_color = "blue" 
       # view.draw_polyline(@profile_pointsV.contents)
 
-## -------------------------------------------------------------------------------
+## -============================================================
     when 2 ## @state = 2: Cross-section drawn, waiting for drag or click to pushpull to length
       # @frame_length was defined in onMouseMove @state == 2
       # Define translation to move profile outline along @apparent_normal by @frame_length
@@ -932,14 +936,15 @@ puts "@flip state = " + @flip.to_s
       ## Copy profile along @apparent_normal
       @tf6 = Geom::Transformation.translation(@vec6)
 
-      @profile_points3.each_index {|i| @profile_points4[i] = @profile_points3[i].transform @tf6}
-      
+      @profile_points3.contents.each_index {|i| @profile_points4.contents[i] = @profile_points3.contents[i].transform @tf6}
+#puts "points4 = " + @profile_points4.contents.inspect
       view.line_width = 2
       view.drawing_color = "magenta" 
       view.draw_polyline(@profile_points3.contents)
-     # view.draw_polyline(@profile_points4.contents)
-      @profile_points3.each_index {|i| view.draw_line(@profile_points.contents[i], @profile_points4.contents[i])}
-      #view.draw_points @first_pick.position.offset(@apparent_normal, @frame_length), 8, 1, "magenta"
+
+      @profile_points3.contents.each_index {|i| view.draw_line(@profile_points3.contents[i], @profile_points4.contents[i])}
+      view.draw_polyline(@profile_points4.contents)
+      view.draw_points @first_pick.position.offset(@apparent_normal, @frame_length), 6, 1, "magenta"
     when 3 ## @state = 3; move/click or drag mouse to set component length
     end ## case @state
 end ## draw_geometry
