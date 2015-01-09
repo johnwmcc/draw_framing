@@ -15,9 +15,32 @@ Keystroke Tab to cycle forward through timber orientation (and maybe Shift+Tab t
 Minor glitches still to fix:
 - @face is left drawn if component name input box is cancelled
 
+## v0.7.6.2
+Derived from 0.7.4 to try to fix problems in drawing rectangular profiles - have not got back to a working draw_geometry showing outline of component that will be created.
+
+Create geometry not quite working yet - draws profile, but not finished component.
+
+Orientation not correct when drawn on solid group top surface - not parallel to edges
+
+Flip still not working. 
+
+Still haven't even looked at axis lock not working to fix on correct axis - the profile is not drawn normal to the axis, though the axis itself is locked in the right direction.
+
+## v0.7.4.0
+Skipped v0.7.3 (all scrambled - deleted it), went to this version to start try to fix axis lock not working properly which I noticed wasn't right in 0.7.0 that I thought WAS ok for all main functions.
+
+## v0.7.2.5
+Starting branch to help debug flip which just isn't working
 
 
-##v.0.7.0
+## 0.7.2.2
+Simplified version to try to debug why my transforms are changing BOTH original and shift/rotated copy of  @profile_pointsH.
+
+Stripped out most code after draw_geometry that for the moment just draws profile at origin.
+
+Not even working properly but shows  @profile_pointsV AND  @profile_pointsH both changing as you move the mouse around the pick point - V is orange 3px wide, H is black 1px wide.
+
+## v.0.7.0
 Finally fixed difference between reported Face.normal and geometric direction of @long_axis, by introducing a new variable @apparent_normal, and using it JUST to calculate where to display long axis in draw_geometry for @state == 1 and 2. For reasons I don't understand, using the (wrong) face.normal still draws the face profile_points array in the right plane, rotating about the wrong @long_axis.
 
 Needed to distinguish cases of 1. Face in a ComponentInstance, 2. Face in a group, and 3. 'Loose' geometry face. 

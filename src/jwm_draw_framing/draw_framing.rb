@@ -28,9 +28,9 @@ module JWM
 class DrawFraming
 ##------------------
   puts "****************************"
-  puts "draw_framing.rb v0.7.6.2 loaded"
+  puts "draw_framing.rb v0.7.6.3 loaded"
   # Derived from v0.7.4 with elements from v0.7.2 pushpull draw working (only they aren't here, yet!)
-  # Tried to invoke PushPullTool on suspend, but looks as if it isn't triggering in quite the right place
+  # Now got draw_geometry to show profile and length that will be drawn on third click
   # Working up to drawing face in (mostly) correct location and orientation
   # May not work correctly on rotated group with aligned axes
   # Still to refining rectangular profile handling esp of axis lock
@@ -1036,7 +1036,7 @@ end ## draw_geometry
 ##------------------
   def suspend(view)
     puts "suspend called"
-    Sketchup.send_action( 'selectPushPullTool:' )
+    #Sketchup.send_action( 'selectPushPullTool:' )
   end 
   
 ##------------------
