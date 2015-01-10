@@ -28,7 +28,7 @@ module JWM
 class DrawFraming
 ##------------------
   puts "****************************"
-  puts "draw_framing.rb v0.7.6.3 loaded"
+  puts "draw_framing.rb v0.7.6.4 loaded"
   # Derived from v0.7.4 with elements from v0.7.2 pushpull draw working (only they aren't here, yet!)
   # Now got draw_geometry to show profile and length that will be drawn on third click
   # Working up to drawing face in (mostly) correct location and orientation
@@ -275,6 +275,7 @@ class DrawFraming
         end
         view.refresh        
     end # case @state
+
   end ## onMouseMove
   
 ##------------------
@@ -437,7 +438,7 @@ class DrawFraming
       # Create the cross-section on the second click
 			if( @ip2.valid? )
 				self.create_geometry(@first_pick.position, @ip2.position, view)
-				self.reset(view)
+				#self.reset(view)
         @state = 2 
 			end ## if @ip2.valid
       txt = "Pick or type distance to set component length"
@@ -447,7 +448,7 @@ class DrawFraming
       @state = 3
       # puts "onLButtonDown " + @state.to_s
       # puts "@frame_length = " + @frame_length.to_s
-      self.draw_geometry(@first_pick.position,@ip3.position, view)
+      self.create_geometry(@first_pick.position,@ip3.position, view)
 
     ##===================================================================
     else
@@ -588,7 +589,7 @@ puts "flip state (TAB) = " + @flip.to_s
  # still to work out how to do!
     false
 
-  end
+  end # onKeyDown
    
 ##------------------
   def onKeyUp key, repeat, flags, view
@@ -629,13 +630,13 @@ puts "flip state (TAB) = " + @flip.to_s
 
       ## Create the frame element
       ## Return length and set value
-      @frame_length = value
-      ## Finish drawing the geometry
-      flags = nil
-      x = nil
-      y = nil
-      view = @model.active_view
-      self.onLButtonDown(flags, x, y, view)
+      # @frame_length = value
+      # Finish drawing the geometry
+      # flags = nil
+      # x = nil
+      # y = nil
+      # view = @model.active_view
+      # self.onLButtonDown(flags, x, y, view)
     end
     ## Note by JWM - not sure what this bit does. Leave for the moment but comment out
     ## if @last_drawn and @state == 0
@@ -681,11 +682,11 @@ puts "flip state (TAB) = " + @flip.to_s
         self.draw_geometry(@first_pick.position, @ip2.position, view)
         @drawn = true
       end
-		end
+		end # if @ip1.valid?
     ## Display cursor text to give feedback at cursor about what 
     ##   size/type of object will be placed
     view.draw_text view.screen_coords(@ip1.position), @cursor_text  
-  end
+  end #def draw view
 
   
 ##------------------
@@ -759,9 +760,9 @@ puts "flip state (TAB) = " + @flip.to_s
       width = @n_size[p_size][1]
       thickness = @n_size[p_size][2]
       ## PAR is simply  a rectangle with width and thickness, drawn in the x, y (red/green) plane
-##       profile = ["PAR", @n_size[p_size][0],[0,0,0],[width,0,0],[width,thickness,0],[0,thickness,0],[0,0,0]]
+       profile = ["PAR", @n_size[p_size][0],[0,0,0],[width,0,0],[width,thickness,0],[0,thickness,0],[0,0,0]]
       ## For testing, put in an angle
-       profile = ["PAR", @n_size[p_size][0],[0,0,0],[0.5*width,0,0],[width,0.5*thickness,0],[width,thickness,0],[0,thickness,0],[0,0,0]]
+##       profile = ["PAR", @n_size[p_size][0],[0,0,0],[0.5*width,0,0],[width,0.5*thickness,0],[width,thickness,0],[0,thickness,0],[0,0,0]]
       ## Make an array of just the profile points
       @profile_points0 = profile[2..-1]
       return profile
@@ -797,7 +798,7 @@ puts "flip state (TAB) = " + @flip.to_s
 ##------------------
 ## Draw the geometry to show where the cross-section will be placed
 	def draw_geometry(pt1, pt2, view)
-    puts "draw_geometry called"
+    puts "draw_geometry called @state = " + @state.inspect
     ## Draw timber profile 
     ## This method has to take account of 
     ## - the shape of the timber cross-section defined in @profile array
@@ -930,6 +931,7 @@ puts "@flip state = " + @flip.to_s
 
 ## -============================================================
     when 2 ## @state = 2: Cross-section drawn, waiting for drag or click to pushpull to length
+#puts "draw_geometry called state = " + @state.inspect
       # @frame_length was defined in onMouseMove @state == 2
       # Define translation to move profile outline along @apparent_normal by @frame_length
       @vec6 = @first_pick.position.vector_to @first_pick.position.offset(@apparent_normal, @frame_length)
@@ -945,7 +947,6 @@ puts "@flip state = " + @flip.to_s
       @profile_points3.contents.each_index {|i| view.draw_line(@profile_points3.contents[i], @profile_points4.contents[i])}
       view.draw_polyline(@profile_points4.contents)
       view.draw_points @first_pick.position.offset(@apparent_normal, @frame_length), 6, 1, "magenta"
-    when 3 ## @state = 3; move/click or drag mouse to set component length
     end ## case @state
 end ## draw_geometry
   
@@ -1007,8 +1008,21 @@ end ## draw_geometry
         # Select only the newly created face inside the component
 				@model.selection.clear
 				@model.selection.add @face 
-      # Invoke PushPull tool to extend to length
-        self.suspend
+        ## =======================================================
+        if @state == 3 && @face ## a component face has been drawn
+        # Pushpull cross-section to length
+  # puts "create_geometry called state 3"
+          if @face.normal == @reported_normal
+            @face.pushpull @frame_length 
+          else ## reverse direction to pushpull
+            @face.pushpull -@frame_length
+          end
+  # puts "@comp_defn.instances[-1] = " + @comp_defn.instances[0].to_s
+          @comp_defn.name = @profile[0] + " " + @n_size[@chosen_size][0] + " x " + @frame_length.to_l.to_s
+          @model.selection.clear
+          self.reset(view)
+          @model.commit_operation
+        end ## if @state == 3
       # If operation cancelled 
 			else
         @model.abort_operation ## alternative way to cancel
@@ -1036,7 +1050,7 @@ end ## draw_geometry
 ##------------------
   def suspend(view)
     puts "suspend called"
-    #Sketchup.send_action( 'selectPushPullTool:' )
+   # Sketchup.send_action( 'selectPushPullTool:' )
   end 
   
 ##------------------

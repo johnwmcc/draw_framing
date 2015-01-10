@@ -15,6 +15,18 @@ Keystroke Tab to cycle forward through timber orientation (and maybe Shift+Tab t
 Minor glitches still to fix:
 - @face is left drawn if component name input box is cancelled
 
+## v0.7.6.4
+Few very minor tweaks. Changed profile to rectangular
+Now is usable BUT:
+- Orientation with mouse moves in reverse sometimes when it shouldn't
+- UserText input for component length isn't setting length
+- Inferencing for @ip3 isn't working - does it need to be moved into draw method, not draw_geometry?
+
+## v0.7.6.3
+Draws rectangular profiles. But Axis Lock still doesn't work well or reliably. Then when trying to fix that, found that the draw_geometry stopped working for @state = 2.
+
+Disabled self.reset(view) after first mouse click, in onLButtonDown - now draws the geometry again. But doesn't create it. Saved this version as next starting point
+
 ## v0.7.6.2
 Derived from 0.7.4 to try to fix problems in drawing rectangular profiles - have not got back to a working draw_geometry showing outline of component that will be created.
 
