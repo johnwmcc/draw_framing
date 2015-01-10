@@ -28,12 +28,15 @@ module JWM
 class DrawFraming
 ##------------------
   puts "****************************"
-  puts "draw_framing.rb v0.7.6.4 loaded"
-  # Derived from v0.7.4 with elements from v0.7.2 pushpull draw working (only they aren't here, yet!)
+  puts "draw_framing.rb v0.7.6.5 loaded"
+  # Derived from v0.7.4 with elements from v0.7.2 pushpull draw working
   # Now got draw_geometry to show profile and length that will be drawn on third click
-  # Working up to drawing face in (mostly) correct location and orientation
-  # May not work correctly on rotated group with aligned axes
+  # Draws face in (mostly) correct location and orientation - not right on unaligned group;
+  # not right in reverse orientation either
+  # Doesn't work correctly on top surface of rotated group with aligned axes
   # Still to refining rectangular profile handling esp of axis lock
+  # Typing in length now does take effect on component length
+  
   ## Set up class variables to hold details of standard sizes of timber
 		@@profile_name = "PAR" ## Key to currently selected profile type such as PAR, architrave etc 
     ## Set initial default for size_index to select 2 x 1 inch or 50x25mm nominal size		
@@ -630,13 +633,13 @@ puts "flip state (TAB) = " + @flip.to_s
 
       ## Create the frame element
       ## Return length and set value
-      # @frame_length = value
+      @frame_length = value
       # Finish drawing the geometry
-      # flags = nil
-      # x = nil
-      # y = nil
-      # view = @model.active_view
-      # self.onLButtonDown(flags, x, y, view)
+      flags = nil
+      x = nil
+      y = nil
+      view = @model.active_view
+      self.onLButtonDown(flags, x, y, view)
     end
     ## Note by JWM - not sure what this bit does. Leave for the moment but comment out
     ## if @last_drawn and @state == 0
@@ -889,7 +892,7 @@ puts "@flip state = " + @flip.to_s
       i = 1
 # puts "Reverse? " + @reverse_rotation.to_s
       unless @reverse_rotation 
-        while i <= (@quadrant + 2)%4 do
+        while i <= (@quadrant)%4 do
           @profile_points3.contents.each_index {|i| @profile_points3.contents[i].transform! @rotate90_la }
           i += 1
         end
@@ -997,7 +1000,7 @@ end ## draw_geometry
 
         # 3. Rotate by 90 degrees about @reported_normal @quad times
         i=1
-        while i <= (@quadrant + 2)%4 do
+        while i <= (@quadrant)%4 do
             @comp_defn.instances[-1].transform!(@rotate90_la)
           i += 1
         end

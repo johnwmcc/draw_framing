@@ -15,6 +15,12 @@ Keystroke Tab to cycle forward through timber orientation (and maybe Shift+Tab t
 Minor glitches still to fix:
 - @face is left drawn if component name input box is cancelled
 
+## v0.7.6.5
+Now works usably - UserText input now works to set length
+Still to fix: 
+- inferencing for @ip3
+- orientation on top of group with aligned axes not parallel to sides (may not be fixable)
+
 ## v0.7.6.4
 Few very minor tweaks. Changed profile to rectangular
 Now is usable BUT:
